@@ -1,0 +1,15 @@
+services:
+  api:
+    build: ./server
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./server/data:/app/data   # SQLite database
+      - /tmp:/tmp                  # temp video/audio files
+    env_file: ./server/.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

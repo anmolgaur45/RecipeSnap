@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "RecipeSnap",
+    "slug": "recipesnap",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.recipesnap.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.recipesnap.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "recipesnap" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            { "scheme": "https", "host": "www.instagram.com", "pathPrefix": "/reel" },
+            { "scheme": "https", "host": "www.instagram.com", "pathPrefix": "/p" },
+            { "scheme": "https", "host": "www.tiktok.com" },
+            { "scheme": "https", "host": "vm.tiktok.com" },
+            { "scheme": "https", "host": "vt.tiktok.com" },
+            { "scheme": "https", "host": "www.youtube.com", "pathPrefix": "/shorts" },
+            { "scheme": "https", "host": "www.youtube.com", "pathPrefix": "/watch" },
+            { "scheme": "https", "host": "youtu.be" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "SEND",
+          "data": [{ "mimeType": "text/plain" }],
+          "category": ["DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "scheme": "recipesnap"
+  }
+}

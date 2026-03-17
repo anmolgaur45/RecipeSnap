@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+
+# Build output
+dist/
+
+# Environment files (never commit real keys)
+.env
+.env.local
+.env*.local
+
+# Native signing keys
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+*.orig.*
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+server/data/
+
+# Editor / IDE
+.vscode/settings.json
+.idea/
+
+# Project-specific development notes (not relevant to contributors)
+CLAUDE.md
+.claude/
+tasks/
