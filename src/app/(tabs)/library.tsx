@@ -30,9 +30,7 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   Medium: '#F59E0B',
   Hard: '#EF4444',
 };
-const QUICK_EMOJIS = ['📁', '⭐', '🍽️', '❤️'];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const QUICK_EMOJIS = ['📁', '⭐', '🍽️', '❤️', '🌿', '🔥'];
 
 function filterKey(type: string, value: string) {
   return `${type}:${value}`;
@@ -55,8 +53,6 @@ export default function LibraryScreen() {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Boot ────────────────────────────────────────────────────────────────────
-
   useEffect(() => {
     void Promise.all([
       getTagGroups().then(setTagGroups).catch(() => {}),
@@ -64,15 +60,10 @@ export default function LibraryScreen() {
     ]);
   }, []);
 
-  // ── Search trigger ──────────────────────────────────────────────────────────
-
   const runSearch = useCallback(
     async (q: string, filters: Map<string, string>, collId: number | null, s: 'recent' | 'alpha') => {
       const hasFilter = q.trim() !== '' || filters.size > 0 || collId !== null;
-      if (!hasFilter) {
-        setSearchResults(null);
-        return;
-      }
+      if (!hasFilter) { setSearchResults(null); return; }
       setIsSearching(true);
       try {
         const params: Record<string, string | number> = { sort: s };
@@ -82,8 +73,7 @@ export default function LibraryScreen() {
           const [type] = key.split(':');
           params[type] = value;
         }
-        const results = await searchRecipes(params);
-        setSearchResults(results);
+        setSearchResults(await searchRecipes(params));
       } catch {
         setSearchResults([]);
       } finally {
@@ -93,7 +83,6 @@ export default function LibraryScreen() {
     []
   );
 
-  // Debounce search input; immediate on filter/sort change
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -108,8 +97,6 @@ export default function LibraryScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilters, activeCollectionId, sort]);
 
-  // ── Filter chip logic ───────────────────────────────────────────────────────
-
   const toggleFilter = (type: string, value: string) => {
     setActiveFilters((prev) => {
       const next = new Map(prev);
@@ -117,7 +104,6 @@ export default function LibraryScreen() {
       if (next.has(key)) {
         next.delete(key);
       } else {
-        // Remove any existing filter for same type
         for (const k of next.keys()) {
           if (k.startsWith(`${type}:`)) next.delete(k);
         }
@@ -132,8 +118,6 @@ export default function LibraryScreen() {
     setActiveCollectionId(null);
     setSearch('');
   };
-
-  // ── Collections ─────────────────────────────────────────────────────────────
 
   const handleNewCollection = async () => {
     if (!newColName.trim()) return;
@@ -151,8 +135,6 @@ export default function LibraryScreen() {
     }
   };
 
-  // ── Displayed recipes ───────────────────────────────────────────────────────
-
   const displayedRecipes: Recipe[] = searchResults !== null
     ? searchResults
     : (sort === 'alpha'
@@ -162,82 +144,88 @@ export default function LibraryScreen() {
 
   const hasAnyFilter = search.trim() !== '' || activeFilters.size > 0 || activeCollectionId !== null;
 
-  // ── Refresh ─────────────────────────────────────────────────────────────────
-
   const onRefresh = useCallback(async () => {
     await Promise.all([
       syncRecipes(),
       getCollections().then(setCollections).catch(() => {}),
     ]);
-    if (hasAnyFilter) {
-      void runSearch(search, activeFilters, activeCollectionId, sort);
-    }
+    if (hasAnyFilter) void runSearch(search, activeFilters, activeCollectionId, sort);
   }, [syncRecipes, hasAnyFilter, runSearch, search, activeFilters, activeCollectionId, sort]);
-
-  // ── Render ──────────────────────────────────────────────────────────────────
-
-  const renderItem = ({ item }: { item: Recipe }) => <RecipeCard recipe={item} />;
 
   const tagFilterTypes = (['cuisine', 'diet', 'method', 'time', 'category'] as const).filter(
     (t) => (tagGroups[t]?.length ?? 0) > 0
   );
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
-      {/* ── Sticky header ─────────────────────────────────────────────────── */}
-      <View
-        style={{
-          backgroundColor: Colors.surface,
-          paddingHorizontal: Spacing.md,
-          paddingTop: Spacing.md,
-          paddingBottom: 10,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.04,
-          shadowRadius: 6,
-          elevation: 3,
-        }}
-      >
+
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <View style={{
+        backgroundColor: Colors.surface,
+        paddingHorizontal: Spacing.md,
+        paddingTop: Spacing.md,
+        paddingBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 4,
+      }}>
         {/* Title row */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-          <Text style={{ flex: 1, fontSize: 22, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3 }}>
-            My Recipes
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 24, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 }}>
+              My Recipes
+            </Text>
+            <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 1 }}>
+              {recipes.length} {recipes.length === 1 ? 'recipe' : 'recipes'} saved
+            </Text>
+          </View>
+          {/* Sort toggle */}
           <Pressable
             onPress={() => setSort((s) => (s === 'recent' ? 'alpha' : 'recent'))}
             style={{
-              flexDirection: 'row', alignItems: 'center', gap: 4,
-              backgroundColor: Colors.background, borderRadius: 8,
-              paddingHorizontal: 10, paddingVertical: 6,
+              flexDirection: 'row', alignItems: 'center', gap: 5,
+              backgroundColor: Colors.background,
+              borderRadius: 10, paddingHorizontal: 11, paddingVertical: 7,
+              borderWidth: 1, borderColor: Colors.border,
             }}
           >
+            <Text style={{ fontSize: 13 }}>{sort === 'recent' ? '⏱' : '🔤'}</Text>
             <Text style={{ fontSize: 12, color: Colors.textSecondary, fontWeight: '600' }}>
-              {sort === 'recent' ? '🕐 Recent' : '🔤 A–Z'}
+              {sort === 'recent' ? 'Recent' : 'A–Z'}
             </Text>
           </Pressable>
         </View>
 
         {/* Search bar */}
-        <TextInput
-          style={{
-            backgroundColor: Colors.background,
-            borderRadius: 12,
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            fontSize: 14,
-            color: Colors.textPrimary,
-            marginBottom: 10,
-          }}
-          placeholder="Search recipes or ingredients..."
-          placeholderTextColor={Colors.textMuted}
-          value={search}
-          onChangeText={setSearch}
-          returnKeyType="search"
-        />
+        <View style={{
+          flexDirection: 'row', alignItems: 'center',
+          backgroundColor: Colors.background,
+          borderRadius: 14, paddingHorizontal: 13, marginBottom: 12,
+          borderWidth: 1, borderColor: Colors.border,
+        }}>
+          <Text style={{ fontSize: 15, color: Colors.textMuted, marginRight: 8 }}>🔍</Text>
+          <TextInput
+            style={{ flex: 1, paddingVertical: 11, fontSize: 14, color: Colors.textPrimary }}
+            placeholder="Search recipes or ingredients..."
+            placeholderTextColor={Colors.textMuted}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch('')} hitSlop={8}>
+              <Text style={{ fontSize: 16, color: Colors.textMuted }}>✕</Text>
+            </Pressable>
+          )}
+        </View>
 
-        {/* Difficulty chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 0 }}>
-          <View style={{ flexDirection: 'row', gap: 6, paddingRight: 8 }}>
+        {/* Filter chips */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ flexDirection: 'row', gap: 7, paddingRight: 8 }}>
             {DIFFICULTY_OPTIONS.map((d) => {
               const key = filterKey('difficulty', d.toLowerCase());
               const active = activeFilters.has(key);
@@ -248,17 +236,24 @@ export default function LibraryScreen() {
                   onPress={() => toggleFilter('difficulty', d.toLowerCase())}
                   style={{
                     flexDirection: 'row', alignItems: 'center', gap: 4,
-                    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
-                    backgroundColor: active ? color : `${color}18`,
+                    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+                    backgroundColor: active ? color : Colors.surface,
+                    borderWidth: 1.5,
+                    borderColor: active ? color : `${color}60`,
                   }}
                 >
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: active ? '#fff' : color }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: active ? '#fff' : color }} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#fff' : color }}>
                     {d}
                   </Text>
-                  {active && <Text style={{ fontSize: 10, color: '#fff' }}>✕</Text>}
                 </Pressable>
               );
             })}
+
+            {/* Separator */}
+            {tagFilterTypes.length > 0 && (
+              <View style={{ width: 1, backgroundColor: Colors.border, marginHorizontal: 2, borderRadius: 1 }} />
+            )}
 
             {/* Dynamic tag chips */}
             {tagFilterTypes.map((type) =>
@@ -271,16 +266,16 @@ export default function LibraryScreen() {
                     onPress={() => toggleFilter(type, tag)}
                     style={{
                       flexDirection: 'row', alignItems: 'center', gap: 4,
-                      paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
-                      backgroundColor: active ? Colors.primary : `${Colors.primary}14`,
-                      borderWidth: active ? 0 : 1,
-                      borderColor: `${Colors.primary}30`,
+                      paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+                      backgroundColor: active ? Colors.primary : Colors.surface,
+                      borderWidth: 1.5,
+                      borderColor: active ? Colors.primary : `${Colors.primary}50`,
                     }}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: active ? '#fff' : Colors.primary }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: active ? '#fff' : Colors.primary }}>
                       {tag}
                     </Text>
-                    {active && <Text style={{ fontSize: 10, color: '#fff' }}>✕</Text>}
+                    {active && <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)' }}>✕</Text>}
                   </Pressable>
                 );
               })
@@ -288,141 +283,188 @@ export default function LibraryScreen() {
           </View>
         </ScrollView>
 
-        {/* Clear all button */}
+        {/* Active filter summary */}
         {hasAnyFilter && (
-          <Pressable onPress={clearAllFilters} style={{ marginTop: 6 }}>
-            <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>Clear all filters ✕</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+            <Text style={{ fontSize: 12, color: Colors.textMuted }}>
+              {displayedRecipes.length} result{displayedRecipes.length !== 1 ? 's' : ''}
+            </Text>
+            <Pressable
+              onPress={clearAllFilters}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 4,
+                backgroundColor: `${Colors.primary}14`,
+                borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '700' }}>Clear filters</Text>
+              <Text style={{ fontSize: 11, color: Colors.primary }}>✕</Text>
+            </Pressable>
+          </View>
         )}
       </View>
 
       {/* ── Collections row ──────────────────────────────────────────────────── */}
-      {collections.length > 0 && (
-        <View style={{ backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: '#F0EDE8' }}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ padding: 10, gap: 8, flexDirection: 'row' }}
-          >
-            {/* + New card / inline input */}
-            {showNewColInput ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 72 }}>
-                <TextInput
-                  autoFocus
-                  value={newColName}
-                  onChangeText={setNewColName}
-                  placeholder="Name..."
-                  placeholderTextColor={Colors.textMuted}
-                  style={{
-                    width: 120, backgroundColor: Colors.background, borderRadius: 10,
-                    paddingHorizontal: 10, paddingVertical: 8, fontSize: 13,
-                    color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.border,
-                  }}
-                  returnKeyType="done"
-                  onSubmitEditing={() => { void handleNewCollection(); }}
-                />
-                <Pressable
-                  onPress={() => { void handleNewCollection(); }}
-                  disabled={creatingCol || !newColName.trim()}
-                  style={{
-                    backgroundColor: Colors.primary, borderRadius: 10,
-                    paddingHorizontal: 10, paddingVertical: 8,
-                    opacity: creatingCol || !newColName.trim() ? 0.5 : 1,
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
-                    {creatingCol ? '...' : 'Add'}
-                  </Text>
-                </Pressable>
-                <Pressable onPress={() => { setShowNewColInput(false); setNewColName(''); }}>
-                  <Text style={{ color: Colors.textMuted, fontSize: 18 }}>✕</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable
-                onPress={() => setShowNewColInput(true)}
+      <View style={{
+        backgroundColor: Colors.surface,
+        borderBottomWidth: 1, borderBottomColor: '#EDEBE6',
+        paddingVertical: 10,
+      }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: Spacing.md, gap: 8, flexDirection: 'row', alignItems: 'center' }}
+        >
+          {/* + New button or inline input */}
+          {showNewColInput ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TextInput
+                autoFocus
+                value={newColName}
+                onChangeText={setNewColName}
+                placeholder="Collection name..."
+                placeholderTextColor={Colors.textMuted}
                 style={{
-                  width: 72, height: 72, borderRadius: 14, borderWidth: 1.5,
-                  borderColor: `${Colors.primary}40`, borderStyle: 'dashed',
-                  alignItems: 'center', justifyContent: 'center',
+                  width: 140, backgroundColor: Colors.background,
+                  borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8,
+                  fontSize: 13, color: Colors.textPrimary,
+                  borderWidth: 1.5, borderColor: Colors.primary,
+                }}
+                returnKeyType="done"
+                onSubmitEditing={() => { void handleNewCollection(); }}
+              />
+              <Pressable
+                onPress={() => { void handleNewCollection(); }}
+                disabled={creatingCol || !newColName.trim()}
+                style={{
+                  backgroundColor: Colors.primary, borderRadius: 20,
+                  paddingHorizontal: 14, paddingVertical: 8,
+                  opacity: creatingCol || !newColName.trim() ? 0.5 : 1,
                 }}
               >
-                <Text style={{ fontSize: 20, color: Colors.primary }}>+</Text>
-                <Text style={{ fontSize: 9, color: Colors.primary, fontWeight: '600', marginTop: 2 }}>New</Text>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                  {creatingCol ? '...' : 'Create'}
+                </Text>
               </Pressable>
-            )}
+              <Pressable
+                onPress={() => { setShowNewColInput(false); setNewColName(''); }}
+                hitSlop={8}
+              >
+                <Text style={{ color: Colors.textMuted, fontSize: 18 }}>✕</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => setShowNewColInput(true)}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 5,
+                paddingHorizontal: 13, paddingVertical: 8, borderRadius: 20,
+                borderWidth: 1.5, borderColor: `${Colors.primary}50`,
+                borderStyle: 'dashed', backgroundColor: `${Colors.primary}08`,
+              }}
+            >
+              <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '700' }}>+</Text>
+              <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>New</Text>
+            </Pressable>
+          )}
 
-            {collections.map((col) => {
-              const active = activeCollectionId === col.id;
-              return (
-                <Pressable
-                  key={col.id}
-                  onPress={() => setActiveCollectionId(active ? null : col.id)}
+          {/* Collection chips */}
+          {collections.map((col) => {
+            const active = activeCollectionId === col.id;
+            return (
+              <Pressable
+                key={col.id}
+                onPress={() => setActiveCollectionId(active ? null : col.id)}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 6,
+                  paddingHorizontal: 13, paddingVertical: 8, borderRadius: 20,
+                  backgroundColor: active ? Colors.primary : Colors.background,
+                  borderWidth: 1.5,
+                  borderColor: active ? Colors.primary : Colors.border,
+                }}
+              >
+                <Text style={{ fontSize: 14 }}>{col.emoji ?? '📁'}</Text>
+                <Text
+                  numberOfLines={1}
                   style={{
-                    width: 72, height: 72, borderRadius: 14,
-                    backgroundColor: active ? Colors.primary : Colors.background,
-                    alignItems: 'center', justifyContent: 'center',
-                    borderWidth: 1.5, borderColor: active ? Colors.primary : '#E8E4DF',
-                    padding: 6,
+                    fontSize: 13, fontWeight: '600', maxWidth: 110,
+                    color: active ? '#fff' : Colors.textPrimary,
                   }}
                 >
-                  <Text style={{ fontSize: 22 }}>{col.emoji ?? '📁'}</Text>
-                  <Text
-                    numberOfLines={1}
-                    style={{ fontSize: 9, fontWeight: '700', color: active ? '#fff' : Colors.textPrimary, marginTop: 2, textAlign: 'center' }}
-                  >
-                    {col.name}
+                  {col.name}
+                </Text>
+                <View style={{
+                  backgroundColor: active ? 'rgba(255,255,255,0.25)' : `${Colors.primary}18`,
+                  borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2,
+                  minWidth: 20, alignItems: 'center',
+                }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: active ? '#fff' : Colors.primary }}>
+                    {col.recipeCount}
                   </Text>
-                  <View style={{
-                    position: 'absolute', top: 4, right: 4,
-                    backgroundColor: active ? 'rgba(255,255,255,0.3)' : Colors.primary,
-                    borderRadius: 6, paddingHorizontal: 3, paddingVertical: 1,
-                  }}>
-                    <Text style={{ fontSize: 8, color: '#fff', fontWeight: '700' }}>{col.recipeCount}</Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
-      {/* ── Recipe list ───────────────────────────────────────────────────────── */}
+      {/* ── Content ──────────────────────────────────────────────────────────── */}
       {isSyncing && recipes.length === 0 ? (
-        <View style={{ padding: Spacing.md }}>
-          {[1, 2, 3, 4].map((i) => <RecipeCardSkeleton key={i} />)}
-        </View>
+        <FlatList
+          data={[1, 2, 3]}
+          keyExtractor={(i) => String(i)}
+          renderItem={() => <RecipeCardSkeleton />}
+          contentContainerStyle={{ padding: Spacing.md }}
+          scrollEnabled={false}
+        />
       ) : isSearching ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={{ marginTop: 12, color: Colors.textSecondary, fontSize: 14 }}>Searching...</Text>
         </View>
       ) : displayedRecipes.length === 0 ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
           {recipes.length === 0 ? (
             <>
-              <Text style={{ fontSize: 48, marginBottom: 16 }}>📖</Text>
-              <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 56, marginBottom: 16 }}>📖</Text>
+              <Text style={{ fontSize: 21, fontWeight: '800', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 }}>
                 Your library is empty
               </Text>
-              <Text style={{ fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginBottom: 24, lineHeight: 20 }}>
-                Paste your first recipe link to get started!
+              <Text style={{ fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginBottom: 28, lineHeight: 21 }}>
+                Save your first recipe by pasting a link on the Extract tab
               </Text>
               <Pressable
                 onPress={() => router.push('/(tabs)/add')}
-                style={{ backgroundColor: Colors.primary, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 13 }}
+                style={{
+                  backgroundColor: Colors.primary, borderRadius: 16,
+                  paddingHorizontal: 28, paddingVertical: 14,
+                  shadowColor: Colors.primary,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.35,
+                  shadowRadius: 10,
+                  elevation: 6,
+                }}
               >
                 <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Extract a Recipe</Text>
               </Pressable>
             </>
           ) : (
             <>
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>🔍</Text>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.textSecondary, textAlign: 'center' }}>
-                No recipes match your filters
+              <Text style={{ fontSize: 44, marginBottom: 12 }}>🔍</Text>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginBottom: 6 }}>
+                No matches found
               </Text>
-              <Pressable onPress={clearAllFilters} style={{ marginTop: 12 }}>
-                <Text style={{ color: Colors.primary, fontWeight: '600', fontSize: 14 }}>Clear filters</Text>
+              <Text style={{ fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 20 }}>
+                Try adjusting your search or filters
+              </Text>
+              <Pressable
+                onPress={clearAllFilters}
+                style={{
+                  backgroundColor: `${Colors.primary}14`,
+                  borderRadius: 20, paddingHorizontal: 18, paddingVertical: 9,
+                }}
+              >
+                <Text style={{ color: Colors.primary, fontWeight: '700', fontSize: 14 }}>Clear all filters</Text>
               </Pressable>
             </>
           )}
@@ -430,15 +472,11 @@ export default function LibraryScreen() {
       ) : (
         <FlatList
           data={displayedRecipes}
-          renderItem={renderItem}
+          renderItem={({ item }) => <RecipeCard recipe={item} />}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: Spacing.md }}
           refreshControl={
-            <RefreshControl
-              refreshing={isSyncing}
-              onRefresh={onRefresh}
-              tintColor={Colors.primary}
-            />
+            <RefreshControl refreshing={isSyncing} onRefresh={onRefresh} tintColor={Colors.primary} />
           }
           showsVerticalScrollIndicator={false}
         />
