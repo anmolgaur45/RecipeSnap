@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, Linking, Modal, Switch, Animated } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, Linking, Modal, Switch, Animated, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
@@ -190,10 +190,14 @@ function AddToCollectionSheet({ visible, recipeId, onClose }: CollectionSheetPro
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(false);
   const [toggling, setToggling] = useState<number | null>(null);
+  const [showInput, setShowInput] = useState(false);
+  const [newName, setNewName] = useState('');
 
   useEffect(() => {
     if (visible) {
       void getCollections().then(setCollections).catch(() => {});
+      setShowInput(false);
+      setNewName('');
     }
   }, [visible]);
 
@@ -228,29 +232,20 @@ function AddToCollectionSheet({ visible, recipeId, onClose }: CollectionSheetPro
     }
   };
 
-  const handleCreate = () => {
-    Alert.prompt(
-      'New Collection',
-      'Enter a name for your collection',
-      async (name) => {
-        if (!name?.trim()) return;
-        setLoading(true);
-        try {
-          const col = await createCollection(name.trim());
-          // Immediately add recipe to new collection
-          await addToCollection(col.id, recipeId);
-          setCollections((prev) => [
-            ...prev,
-            { ...col, recipeIds: [recipeId], recipeCount: 1 },
-          ]);
-        } catch {
-          Alert.alert('Error', 'Could not create collection');
-        } finally {
-          setLoading(false);
-        }
-      },
-      'plain-text'
-    );
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    setLoading(true);
+    try {
+      const col = await createCollection(newName.trim());
+      await addToCollection(col.id, recipeId);
+      setCollections((prev) => [...prev, { ...col, recipeIds: [recipeId], recipeCount: 1 }]);
+      setShowInput(false);
+      setNewName('');
+    } catch {
+      Alert.alert('Error', 'Could not create collection');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -273,7 +268,7 @@ function AddToCollectionSheet({ visible, recipeId, onClose }: CollectionSheetPro
             Add to Collection
           </Text>
 
-          {collections.length === 0 ? (
+          {collections.length === 0 && !showInput ? (
             <Text style={{ fontSize: 14, color: Colors.textSecondary, textAlign: 'center', paddingVertical: 16 }}>
               No collections yet. Create one below!
             </Text>
@@ -305,20 +300,57 @@ function AddToCollectionSheet({ visible, recipeId, onClose }: CollectionSheetPro
             })
           )}
 
-          <Pressable
-            onPress={handleCreate}
-            disabled={loading}
-            style={{
-              flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-              backgroundColor: Colors.background, borderRadius: 12,
-              paddingVertical: 12, borderWidth: 1, borderColor: Colors.border,
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.primary }}>
-              {loading ? 'Creating...' : '+ Create new collection'}
-            </Text>
-          </Pressable>
+          {/* Inline create input */}
+          {showInput ? (
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <TextInput
+                autoFocus
+                value={newName}
+                onChangeText={setNewName}
+                placeholder="Collection name..."
+                placeholderTextColor={Colors.textMuted}
+                style={{
+                  flex: 1, backgroundColor: Colors.background, borderRadius: 10,
+                  paddingHorizontal: 12, paddingVertical: 10, fontSize: 14,
+                  color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.border,
+                }}
+                onSubmitEditing={() => { void handleCreate(); }}
+                returnKeyType="done"
+              />
+              <Pressable
+                onPress={() => { void handleCreate(); }}
+                disabled={loading || !newName.trim()}
+                style={{
+                  backgroundColor: Colors.primary, borderRadius: 10,
+                  paddingHorizontal: 14, paddingVertical: 10,
+                  opacity: loading || !newName.trim() ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
+                  {loading ? '...' : 'Add'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { setShowInput(false); setNewName(''); }}
+                style={{ paddingHorizontal: 8, paddingVertical: 10 }}
+              >
+                <Text style={{ color: Colors.textMuted, fontSize: 14 }}>✕</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => setShowInput(true)}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                backgroundColor: Colors.background, borderRadius: 12,
+                paddingVertical: 12, borderWidth: 1, borderColor: Colors.border,
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.primary }}>
+                + Create new collection
+              </Text>
+            </Pressable>
+          )}
 
           <Pressable onPress={onClose} style={{ paddingVertical: 14, alignItems: 'center' }}>
             <Text style={{ fontSize: 15, color: Colors.textSecondary, fontWeight: '600' }}>Done</Text>

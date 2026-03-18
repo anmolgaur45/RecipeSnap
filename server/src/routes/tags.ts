@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/schema';
+import { tagRecipe } from '../services/autoTagger';
 
 export const tagsRouter = Router();
 
@@ -27,4 +28,28 @@ tagsRouter.get('/', (_req: Request, res: Response) => {
   }
 
   res.json(grouped);
+});
+
+/**
+ * POST /api/tags/backfill — tag all recipes that have no tags yet.
+ * Useful for seeding tags on existing recipes without re-extraction.
+ * Runs async; returns immediately with a list of recipe IDs being processed.
+ */
+tagsRouter.post('/backfill', async (_req: Request, res: Response) => {
+  const untagged = db
+    .prepare(
+      `SELECT DISTINCT r.id FROM recipes r
+       WHERE NOT EXISTS (SELECT 1 FROM recipe_tags rt WHERE rt.recipeId = r.id)`,
+    )
+    .all() as Array<{ id: string }>;
+
+  const ids = untagged.map((r) => r.id);
+  res.json({ queued: ids.length, recipeIds: ids });
+
+  // Run tagging in background after response is sent
+  for (const { id } of untagged) {
+    await tagRecipe(id).catch((e: unknown) => {
+      console.warn(`[backfill] failed for ${id}:`, e);
+    });
+  }
 });

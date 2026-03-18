@@ -49,6 +49,9 @@ export default function LibraryScreen() {
   const [searchResults, setSearchResults] = useState<Recipe[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [activeCollectionId, setActiveCollectionId] = useState<number | null>(null);
+  const [showNewColInput, setShowNewColInput] = useState(false);
+  const [newColName, setNewColName] = useState('');
+  const [creatingCol, setCreatingCol] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -132,22 +135,20 @@ export default function LibraryScreen() {
 
   // ── Collections ─────────────────────────────────────────────────────────────
 
-  const handleNewCollection = () => {
-    Alert.prompt(
-      'New Collection',
-      'Enter a name for your collection',
-      async (name) => {
-        if (!name?.trim()) return;
-        const emoji = QUICK_EMOJIS[Math.floor(Math.random() * QUICK_EMOJIS.length)];
-        try {
-          const col = await createCollection(name.trim(), emoji);
-          setCollections((prev) => [...prev, col]);
-        } catch {
-          Alert.alert('Error', 'Could not create collection');
-        }
-      },
-      'plain-text'
-    );
+  const handleNewCollection = async () => {
+    if (!newColName.trim()) return;
+    setCreatingCol(true);
+    const emoji = QUICK_EMOJIS[Math.floor(Math.random() * QUICK_EMOJIS.length)];
+    try {
+      const col = await createCollection(newColName.trim(), emoji);
+      setCollections((prev) => [...prev, col]);
+      setNewColName('');
+      setShowNewColInput(false);
+    } catch {
+      Alert.alert('Error', 'Could not create collection');
+    } finally {
+      setCreatingCol(false);
+    }
   };
 
   // ── Displayed recipes ───────────────────────────────────────────────────────
@@ -303,18 +304,53 @@ export default function LibraryScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ padding: 10, gap: 8, flexDirection: 'row' }}
           >
-            {/* + New card */}
-            <Pressable
-              onPress={handleNewCollection}
-              style={{
-                width: 72, height: 72, borderRadius: 14, borderWidth: 1.5,
-                borderColor: `${Colors.primary}40`, borderStyle: 'dashed',
-                alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Text style={{ fontSize: 20, color: Colors.primary }}>+</Text>
-              <Text style={{ fontSize: 9, color: Colors.primary, fontWeight: '600', marginTop: 2 }}>New</Text>
-            </Pressable>
+            {/* + New card / inline input */}
+            {showNewColInput ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 72 }}>
+                <TextInput
+                  autoFocus
+                  value={newColName}
+                  onChangeText={setNewColName}
+                  placeholder="Name..."
+                  placeholderTextColor={Colors.textMuted}
+                  style={{
+                    width: 120, backgroundColor: Colors.background, borderRadius: 10,
+                    paddingHorizontal: 10, paddingVertical: 8, fontSize: 13,
+                    color: Colors.textPrimary, borderWidth: 1, borderColor: Colors.border,
+                  }}
+                  returnKeyType="done"
+                  onSubmitEditing={() => { void handleNewCollection(); }}
+                />
+                <Pressable
+                  onPress={() => { void handleNewCollection(); }}
+                  disabled={creatingCol || !newColName.trim()}
+                  style={{
+                    backgroundColor: Colors.primary, borderRadius: 10,
+                    paddingHorizontal: 10, paddingVertical: 8,
+                    opacity: creatingCol || !newColName.trim() ? 0.5 : 1,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                    {creatingCol ? '...' : 'Add'}
+                  </Text>
+                </Pressable>
+                <Pressable onPress={() => { setShowNewColInput(false); setNewColName(''); }}>
+                  <Text style={{ color: Colors.textMuted, fontSize: 18 }}>✕</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => setShowNewColInput(true)}
+                style={{
+                  width: 72, height: 72, borderRadius: 14, borderWidth: 1.5,
+                  borderColor: `${Colors.primary}40`, borderStyle: 'dashed',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 20, color: Colors.primary }}>+</Text>
+                <Text style={{ fontSize: 9, color: Colors.primary, fontWeight: '600', marginTop: 2 }}>New</Text>
+              </Pressable>
+            )}
 
             {collections.map((col) => {
               const active = activeCollectionId === col.id;
