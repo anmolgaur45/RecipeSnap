@@ -83,6 +83,76 @@ recipesRouter.get('/', (_req: Request, res: Response) => {
   res.json(rows.map(hydrateRecipe));
 });
 
+/**
+ * GET /api/recipes/search — server-side search + filter.
+ * Query params: q, cuisine, diet, difficulty, method, time, category, collectionId, sort
+ */
+recipesRouter.get('/search', (req: Request, res: Response) => {
+  const {
+    q,
+    cuisine,
+    diet,
+    difficulty,
+    method,
+    time,
+    category,
+    collectionId,
+    sort = 'recent',
+  } = req.query as Record<string, string | undefined>;
+
+  const whereClauses: string[] = [];
+  const params: unknown[] = [];
+
+  // Full-text search across title, description, ingredient names
+  if (q?.trim()) {
+    const pattern = `%${q.trim()}%`;
+    whereClauses.push(
+      `(r.title LIKE ? OR r.description LIKE ? OR EXISTS (
+         SELECT 1 FROM ingredients i WHERE i.recipeId = r.id AND i.item LIKE ?
+       ))`,
+    );
+    params.push(pattern, pattern, pattern);
+  }
+
+  // Difficulty filter (direct column)
+  if (difficulty) {
+    whereClauses.push('r.difficulty = ?');
+    params.push(difficulty.toLowerCase());
+  }
+
+  // Tag-type filters (cuisine, diet, method, time, category)
+  const tagFilters: Array<{ type: string; value: string }> = [];
+  if (cuisine) tagFilters.push({ type: 'cuisine', value: cuisine });
+  if (diet) tagFilters.push({ type: 'diet', value: diet });
+  if (method) tagFilters.push({ type: 'method', value: method });
+  if (time) tagFilters.push({ type: 'time', value: time });
+  if (category) tagFilters.push({ type: 'category', value: category });
+
+  for (const tf of tagFilters) {
+    whereClauses.push(
+      `EXISTS (SELECT 1 FROM recipe_tags rt WHERE rt.recipeId = r.id AND rt.type = ? AND rt.tag = ?)`,
+    );
+    params.push(tf.type, tf.value);
+  }
+
+  // Collection filter
+  if (collectionId) {
+    whereClauses.push(
+      `EXISTS (SELECT 1 FROM recipe_collections rc WHERE rc.recipeId = r.id AND rc.collectionId = ?)`,
+    );
+    params.push(collectionId);
+  }
+
+  const where = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+  const order = sort === 'alpha' ? 'r.title ASC' : 'r.createdAt DESC';
+
+  const rows = db
+    .prepare(`SELECT r.* FROM recipes r ${where} ORDER BY ${order}`)
+    .all(...params) as DbRecipe[];
+
+  res.json(rows.map(hydrateRecipe));
+});
+
 /** GET /api/recipes/:id — get a single recipe */
 recipesRouter.get('/:id', (req: Request, res: Response) => {
   const row = db

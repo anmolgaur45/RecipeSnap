@@ -1,5 +1,5 @@
 import { API_URL } from '@/constants/config';
-import { AdaptationResult, ExtractionResult, Ingredient, ProcessingStage, Recipe, SubstitutionReason, SubstitutionResult } from '@/store/types';
+import { AdaptationResult, Collection, ExtractionResult, Ingredient, ProcessingStage, Recipe, SubstitutionReason, SubstitutionResult, TagGroup } from '@/store/types';
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -120,6 +120,68 @@ export async function getSubstitutions(
     throw new Error(err.error ?? `Server error: ${response.status}`);
   }
   return response.json() as Promise<SubstitutionResult>;
+}
+
+// ── Search & filter ───────────────────────────────────────────────────────────
+
+export interface SearchParams {
+  q?: string;
+  cuisine?: string;
+  diet?: string;
+  difficulty?: string;
+  method?: string;
+  time?: string;
+  category?: string;
+  collectionId?: number;
+  sort?: 'recent' | 'alpha';
+}
+
+export async function searchRecipes(params: SearchParams): Promise<Recipe[]> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') qs.set(k, String(v));
+  }
+  const response = await fetch(`${API_URL}/api/recipes/search?${qs.toString()}`);
+  if (!response.ok) throw new Error('Search failed');
+  return response.json() as Promise<Recipe[]>;
+}
+
+export async function getTagGroups(): Promise<TagGroup> {
+  const response = await fetch(`${API_URL}/api/tags`);
+  if (!response.ok) throw new Error('Failed to fetch tags');
+  return response.json() as Promise<TagGroup>;
+}
+
+// ── Collections ───────────────────────────────────────────────────────────────
+
+export async function getCollections(): Promise<Collection[]> {
+  const response = await fetch(`${API_URL}/api/collections`);
+  if (!response.ok) throw new Error('Failed to fetch collections');
+  return response.json() as Promise<Collection[]>;
+}
+
+export async function createCollection(name: string, emoji?: string): Promise<Collection> {
+  const response = await fetch(`${API_URL}/api/collections`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, emoji }),
+  });
+  if (!response.ok) throw new Error('Failed to create collection');
+  return response.json() as Promise<Collection>;
+}
+
+export async function addToCollection(collectionId: number, recipeId: string): Promise<void> {
+  await fetch(`${API_URL}/api/collections/${collectionId}/recipes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipeId }),
+  });
+}
+
+export async function removeFromCollection(collectionId: number, recipeId: string): Promise<void> {
+  await fetch(`${API_URL}/api/collections/${collectionId}/recipes/${recipeId}`, {
+    method: 'DELETE',
+  });
 }
 
 /** AI-adapt a recipe (vegan, gluten-free, keto, etc.) and save as a new recipe */

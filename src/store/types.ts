@@ -23,7 +23,7 @@ export type GroceryAisle =
   | 'beverages'
   | 'other';
 
-export type RecipeTagType = 'cuisine' | 'diet' | 'difficulty' | 'method' | 'time' | 'custom';
+export type RecipeTagType = 'cuisine' | 'diet' | 'difficulty' | 'method' | 'time' | 'custom' | 'category';
 
 export type AdaptationType =
   | 'vegan'
@@ -158,6 +158,19 @@ export interface Collection {
   name: string;
   emoji: string | null;
   createdAt: string;
+  recipeCount: number;
+  recipeIds: string[];
+}
+
+// ── Tag groups ────────────────────────────────────────────────────────────────
+
+export interface TagGroup {
+  cuisine?: string[];
+  diet?: string[];
+  method?: string[];
+  time?: string[];
+  category?: string[];
+  custom?: string[];
 }
 
 // ── Tags (normalized) ─────────────────────────────────────────────────────────

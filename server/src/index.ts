@@ -8,6 +8,7 @@ import { groceryRouter } from './routes/grocery';
 import { pantryRouter } from './routes/pantry';
 import { collectionsRouter } from './routes/collections';
 import { adaptRouter } from './routes/adapt';
+import { tagsRouter } from './routes/tags';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -28,6 +29,7 @@ app.use('/api/grocery-lists', groceryRouter);
 app.use('/api/pantry', pantryRouter);
 app.use('/api/collections', collectionsRouter);
 app.use('/api/adapt', adaptRouter);
+app.use('/api/tags', tagsRouter);
 
 // 404 handler
 app.use((_req, res) => {

@@ -3,11 +3,29 @@ import { db, DbCollection } from '../db/schema';
 
 export const collectionsRouter = Router();
 
-/** GET /api/collections — list all collections */
+/** GET /api/collections — list all collections with recipe count + IDs */
 collectionsRouter.get('/', (_req: Request, res: Response) => {
-  const collections = db
-    .prepare('SELECT * FROM collections ORDER BY name ASC')
-    .all() as DbCollection[];
+  const rows = db
+    .prepare(`
+      SELECT c.id, c.name, c.emoji, c.createdAt,
+             COUNT(rc.recipeId) as recipeCount,
+             COALESCE(GROUP_CONCAT(rc.recipeId), '') as recipeIdsStr
+      FROM collections c
+      LEFT JOIN recipe_collections rc ON rc.collectionId = c.id
+      GROUP BY c.id
+      ORDER BY c.name ASC
+    `)
+    .all() as Array<DbCollection & { recipeCount: number; recipeIdsStr: string }>;
+
+  const collections = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    emoji: r.emoji,
+    createdAt: r.createdAt,
+    recipeCount: r.recipeCount,
+    recipeIds: r.recipeIdsStr ? r.recipeIdsStr.split(',') : [],
+  }));
+
   res.json(collections);
 });
 
@@ -24,7 +42,7 @@ collectionsRouter.post('/', (req: Request, res: Response) => {
   const collection = db
     .prepare('SELECT * FROM collections WHERE id = ?')
     .get(result.lastInsertRowid) as DbCollection;
-  res.status(201).json(collection);
+  res.status(201).json({ ...collection, recipeCount: 0, recipeIds: [] });
 });
 
 /** POST /api/collections/:id/recipes — add a recipe to a collection */

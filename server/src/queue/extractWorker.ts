@@ -6,6 +6,7 @@ import { transcribeAudio } from '../services/transcriber';
 import { runOcrOnVideo } from '../services/ocrService';
 import { structureRecipe, toRecipeRecord } from '../services/recipeStructurer';
 import { calculateNutrition } from '../services/nutritionCalculator';
+import { tagRecipe } from '../services/autoTagger';
 import { db } from '../db/schema';
 import { type Job, updateJob, addProgress, acquireSlot, releaseSlot } from './jobStore';
 import type { ExtractionResult } from '../routes/extract';
@@ -119,6 +120,11 @@ export async function runExtractionJob(job: Job): Promise<void> {
       .catch((e: unknown) => {
         console.warn('[worker] Nutrition calculation failed (non-fatal):', e);
       });
+
+    // Fire-and-forget auto-tagging
+    void tagRecipe(recipe.id).catch((e: unknown) => {
+      console.warn('[worker] Auto-tagging failed (non-fatal):', e);
+    });
 
     const result: ExtractionResult = {
       recipe,

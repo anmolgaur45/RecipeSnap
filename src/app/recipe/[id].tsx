@@ -16,8 +16,8 @@ import { NutritionCard } from '@/components/NutritionCard';
 import { SubstitutionSheet } from '@/components/SubstitutionSheet';
 import { Colors, Spacing } from '@/constants/theme';
 import { formatShoppingList, formatRecipeAsText } from '@/utils/formatters';
-import { scaleRecipe, updateServings, adaptRecipeApi } from '@/services/api';
-import type { AdaptationResult, AdaptationType, GroceryList, Ingredient, SubstitutionSuggestion } from '@/store/types';
+import { scaleRecipe, updateServings, adaptRecipeApi, getCollections, createCollection, addToCollection, removeFromCollection } from '@/services/api';
+import type { AdaptationResult, AdaptationType, Collection, GroceryList, Ingredient, SubstitutionSuggestion } from '@/store/types';
 
 const DIFFICULTY_COLOR: Record<string, string> = {
   easy: '#10B981',
@@ -178,6 +178,157 @@ function AddToGrocerySheet({ visible, recipeId, recipeTitle, onClose }: GroceryS
   );
 }
 
+// ── Add to Collection Sheet ───────────────────────────────────────────────────
+
+interface CollectionSheetProps {
+  visible: boolean;
+  recipeId: string;
+  onClose: () => void;
+}
+
+function AddToCollectionSheet({ visible, recipeId, onClose }: CollectionSheetProps) {
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [toggling, setToggling] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      void getCollections().then(setCollections).catch(() => {});
+    }
+  }, [visible]);
+
+  const isMember = (col: Collection) => col.recipeIds.includes(recipeId);
+
+  const handleToggle = async (col: Collection) => {
+    setToggling(col.id);
+    try {
+      if (isMember(col)) {
+        await removeFromCollection(col.id, recipeId);
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === col.id
+              ? { ...c, recipeIds: c.recipeIds.filter((id) => id !== recipeId), recipeCount: c.recipeCount - 1 }
+              : c
+          )
+        );
+      } else {
+        await addToCollection(col.id, recipeId);
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === col.id
+              ? { ...c, recipeIds: [...c.recipeIds, recipeId], recipeCount: c.recipeCount + 1 }
+              : c
+          )
+        );
+      }
+    } catch {
+      Alert.alert('Error', 'Could not update collection');
+    } finally {
+      setToggling(null);
+    }
+  };
+
+  const handleCreate = () => {
+    Alert.prompt(
+      'New Collection',
+      'Enter a name for your collection',
+      async (name) => {
+        if (!name?.trim()) return;
+        setLoading(true);
+        try {
+          const col = await createCollection(name.trim());
+          // Immediately add recipe to new collection
+          await addToCollection(col.id, recipeId);
+          setCollections((prev) => [
+            ...prev,
+            { ...col, recipeIds: [recipeId], recipeCount: 1 },
+          ]);
+        } catch {
+          Alert.alert('Error', 'Could not create collection');
+        } finally {
+          setLoading(false);
+        }
+      },
+      'plain-text'
+    );
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
+        onPress={onClose}
+      >
+        <View
+          style={{
+            backgroundColor: Colors.surface,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            padding: 24,
+            paddingBottom: 40,
+            gap: 12,
+          }}
+        >
+          <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.textPrimary }}>
+            Add to Collection
+          </Text>
+
+          {collections.length === 0 ? (
+            <Text style={{ fontSize: 14, color: Colors.textSecondary, textAlign: 'center', paddingVertical: 16 }}>
+              No collections yet. Create one below!
+            </Text>
+          ) : (
+            collections.map((col) => {
+              const active = isMember(col);
+              const isToggling = toggling === col.id;
+              return (
+                <Pressable
+                  key={col.id}
+                  onPress={() => { void handleToggle(col); }}
+                  disabled={isToggling}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 12,
+                    backgroundColor: active ? `${Colors.primary}0F` : Colors.background,
+                    borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16,
+                    borderWidth: 1.5, borderColor: active ? `${Colors.primary}40` : 'transparent',
+                    opacity: isToggling ? 0.5 : 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 22 }}>{col.emoji ?? '📁'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.textPrimary }}>{col.name}</Text>
+                    <Text style={{ fontSize: 12, color: Colors.textMuted }}>{col.recipeCount} recipe{col.recipeCount !== 1 ? 's' : ''}</Text>
+                  </View>
+                  {active && <Text style={{ fontSize: 18, color: Colors.primary }}>✓</Text>}
+                </Pressable>
+              );
+            })
+          )}
+
+          <Pressable
+            onPress={handleCreate}
+            disabled={loading}
+            style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+              backgroundColor: Colors.background, borderRadius: 12,
+              paddingVertical: 12, borderWidth: 1, borderColor: Colors.border,
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.primary }}>
+              {loading ? 'Creating...' : '+ Create new collection'}
+            </Text>
+          </Pressable>
+
+          <Pressable onPress={onClose} style={{ paddingVertical: 14, alignItems: 'center' }}>
+            <Text style={{ fontSize: 15, color: Colors.textSecondary, fontWeight: '600' }}>Done</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function RecipeDetailScreen() {
@@ -185,6 +336,7 @@ export default function RecipeDetailScreen() {
   const { recipes, saveRecipe, deleteRecipe } = useRecipeStore();
   const insets = useSafeAreaInsets();
   const [showGrocerySheet, setShowGrocerySheet] = useState(false);
+  const [showCollectionSheet, setShowCollectionSheet] = useState(false);
 
   const recipe = recipes.find((r) => r.id === id);
 
@@ -517,6 +669,16 @@ export default function RecipeDetailScreen() {
           >
             <Text style={{ fontSize: 14, fontWeight: '600', color: '#16A34A' }}>🛒 Add to Grocery List</Text>
           </Pressable>
+          {/* Collection button */}
+          <Pressable
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowCollectionSheet(true);
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: `${Colors.primary}0F`, borderRadius: 14, paddingVertical: 15 }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.primary }}>🗂 Add to Collection</Text>
+          </Pressable>
           <Pressable
             onPress={() => Linking.openURL(recipe.sourceUrl)}
             style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.surface, borderRadius: 14, paddingVertical: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 }}
@@ -559,6 +721,12 @@ export default function RecipeDetailScreen() {
         recipeId={recipe.id}
         onClose={() => setShowSubSheet(false)}
         onApply={handleApplySubstitution}
+      />
+
+      <AddToCollectionSheet
+        visible={showCollectionSheet}
+        recipeId={recipe.id}
+        onClose={() => setShowCollectionSheet(false)}
       />
     </>
   );
