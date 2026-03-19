@@ -168,9 +168,14 @@ recipesRouter.get('/:id', (req: Request, res: Response) => {
 
 /** DELETE /api/recipes/:id — delete a recipe */
 recipesRouter.delete('/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  // Clean up adaptation history on both sides before deleting the recipe,
+  // since recipe_adaptations lacks ON DELETE CASCADE (SQLite limitation).
+  db.prepare('DELETE FROM recipe_adaptations WHERE originalRecipeId = ? OR adaptedRecipeId = ?').run(id, id);
+
   const result = db
     .prepare('DELETE FROM recipes WHERE id = ?')
-    .run(req.params.id);
+    .run(id);
 
   if (result.changes === 0) {
     res.status(404).json({ error: 'Recipe not found' });
@@ -178,6 +183,7 @@ recipesRouter.delete('/:id', (req: Request, res: Response) => {
   }
   res.status(204).end();
 });
+
 
 /**
  * POST /api/recipes/:id/scale — return scaled ingredient list without modifying the DB.

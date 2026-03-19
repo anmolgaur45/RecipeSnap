@@ -66,7 +66,6 @@ RULES:
  */
 export async function tagRecipe(recipeId: string): Promise<void> {
   if (taggedRecipes.has(recipeId)) {
-    console.log(`[autoTagger] skipping ${recipeId} (already tagged this session)`);
     return;
   }
 
@@ -121,8 +120,6 @@ ${ingredientList}
 Steps (first 3):
 ${stepsContext}`;
 
-  console.log(`[autoTagger] tagging "${recipe.title}" (${recipeId})`);
-
   let aiTags: Array<{ tag: string; type: string }> = [];
 
   try {
@@ -170,5 +167,4 @@ ${stepsContext}`;
   })();
 
   taggedRecipes.add(recipeId);
-  console.log(`[autoTagger] saved ${allTags.length} tags for "${recipe.title}"`);
 }

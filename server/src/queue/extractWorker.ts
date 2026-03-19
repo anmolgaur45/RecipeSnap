@@ -115,7 +115,6 @@ export async function runExtractionJob(job: Job): Promise<void> {
           nutrition.fatGrams, nutrition.fiberGrams, nutrition.sugarGrams, nutrition.sodiumMg,
           nutrition.confidence, recipe.id,
         );
-        console.log(`[worker] Nutrition cached for ${recipe.id}`);
       })
       .catch((e: unknown) => {
         console.warn('[worker] Nutrition calculation failed (non-fatal):', e);

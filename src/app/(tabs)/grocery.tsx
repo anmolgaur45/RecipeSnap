@@ -10,6 +10,7 @@ import {
   Modal,
   RefreshControl,
   StyleSheet,
+  Animated,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,6 +34,48 @@ const AISLE_EMOJI: Record<string, string> = {
   beverages: '🥤',
   other: '🛒',
 };
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+
+function GroceryRowSkeleton() {
+  const opacity = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    const shimmer = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    shimmer.start();
+    return () => shimmer.stop();
+  }, [opacity]);
+  return (
+    <Animated.View style={{ opacity, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#fff', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB', gap: 12 }}>
+      <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#E5E7EB' }} />
+      <View style={{ flex: 1, gap: 6 }}>
+        <View style={{ height: 14, borderRadius: 7, backgroundColor: '#E5E7EB', width: '70%' }} />
+        <View style={{ height: 11, borderRadius: 6, backgroundColor: '#E5E7EB', width: '40%' }} />
+      </View>
+      <View style={{ width: 40, height: 22, borderRadius: 11, backgroundColor: '#E5E7EB' }} />
+    </Animated.View>
+  );
+}
+
+function GroceryLoadingSkeleton() {
+  return (
+    <View>
+      {/* Section header skeleton */}
+      <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F8F7F4' }}>
+        <View style={{ height: 10, width: 80, borderRadius: 5, backgroundColor: '#E5E7EB' }} />
+      </View>
+      {[1, 2, 3].map((i) => <GroceryRowSkeleton key={i} />)}
+      <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F8F7F4', marginTop: 8 }}>
+        <View style={{ height: 10, width: 60, borderRadius: 5, backgroundColor: '#E5E7EB' }} />
+      </View>
+      {[4, 5].map((i) => <GroceryRowSkeleton key={i} />)}
+    </View>
+  );
+}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -344,6 +387,18 @@ export default function GroceryScreen() {
 
   const progress = activeList?.progress;
   const progressPct = progress && progress.total > 0 ? progress.checked / progress.total : 0;
+
+  // ── Loading skeleton ─────────────────────────────────────────────────────────
+  if (isLoading && !activeList) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>🛒 Grocery</Text>
+        </View>
+        <GroceryLoadingSkeleton />
+      </View>
+    );
+  }
 
   // ── Empty state ──────────────────────────────────────────────────────────────
   if (!activeList && !isLoading) {

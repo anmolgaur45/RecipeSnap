@@ -9,7 +9,6 @@ import {
   RefreshControl,
   SafeAreaView,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useRecipeStore } from '@/store/recipeStore';
@@ -418,10 +417,13 @@ export default function LibraryScreen() {
           scrollEnabled={false}
         />
       ) : isSearching ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={{ marginTop: 12, color: Colors.textSecondary, fontSize: 14 }}>Searching...</Text>
-        </View>
+        <FlatList
+          data={[1, 2, 3]}
+          keyExtractor={(i) => String(i)}
+          renderItem={() => <RecipeCardSkeleton />}
+          contentContainerStyle={{ padding: Spacing.md }}
+          scrollEnabled={false}
+        />
       ) : displayedRecipes.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
           {recipes.length === 0 ? (

@@ -120,11 +120,8 @@ export async function substituteIngredient(params: {
   const key = cacheKey(recipeId, ingredient.item, reason);
   const cached = getCached(key);
   if (cached) {
-    console.log(`[substituter] cache hit for "${ingredient.item}" (${reason})`);
     return cached;
   }
-
-  console.log(`[substituter] calling AI for "${ingredient.item}" in "${recipe.title}" (reason: ${reason})`);
 
   const ingredientList = allIngredients
     .map((i, idx) => `${idx + 1}. ${i.quantity} ${i.item}`)

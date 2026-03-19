@@ -171,17 +171,19 @@ export async function createCollection(name: string, emoji?: string): Promise<Co
 }
 
 export async function addToCollection(collectionId: number, recipeId: string): Promise<void> {
-  await fetch(`${API_URL}/api/collections/${collectionId}/recipes`, {
+  const res = await fetch(`${API_URL}/api/collections/${collectionId}/recipes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ recipeId }),
   });
+  if (!res.ok) throw new Error('Failed to add to collection');
 }
 
 export async function removeFromCollection(collectionId: number, recipeId: string): Promise<void> {
-  await fetch(`${API_URL}/api/collections/${collectionId}/recipes/${recipeId}`, {
+  const res = await fetch(`${API_URL}/api/collections/${collectionId}/recipes/${recipeId}`, {
     method: 'DELETE',
   });
+  if (!res.ok) throw new Error('Failed to remove from collection');
 }
 
 /** AI-adapt a recipe (vegan, gluten-free, keto, etc.) and save as a new recipe */
