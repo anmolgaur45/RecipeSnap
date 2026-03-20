@@ -68,7 +68,7 @@ export function RecipeRecommendationCard({ rec, onAddMissing }: Props) {
           <Text style={styles.title} numberOfLines={2}>{rec.recipeTitle}</Text>
           <View style={styles.metaRow}>
             {rec.recipeTime ? (
-              <Text style={styles.metaChip}>⏱ {rec.recipeTime}</Text>
+              <Text style={styles.metaChip}>🕐 {rec.recipeTime}</Text>
             ) : null}
             <Text style={styles.metaChip}>
               {rec.recipeDifficulty === 'easy' ? '🟢' : rec.recipeDifficulty === 'medium' ? '🟡' : '🔴'}

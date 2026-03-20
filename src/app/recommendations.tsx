@@ -16,6 +16,7 @@ import {
   getPantryMatches,
   getAISuggestions,
   getExpiringAlerts,
+  saveAISuggestionToLibrary,
   type RecipeRecommendation,
   type AISuggestedRecipe,
   type ExpiringAlert,
@@ -293,27 +294,48 @@ export default function RecommendationsScreen() {
 
 function AISuggestionCard({ suggestion }: { suggestion: AISuggestedRecipe }) {
   const [expanded, setExpanded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (saving || savedId) return;
+    setSaving(true);
+    try {
+      const result = await saveAISuggestionToLibrary(suggestion);
+      setSavedId(result.id);
+    } catch {
+      Alert.alert('Error', 'Failed to save recipe. Make sure the server is running.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <Pressable
-      style={styles.aiCard}
-      onPress={() => setExpanded((v) => !v)}
-    >
-      <View style={styles.aiCardHeader}>
+    <View style={styles.aiCard}>
+      {/* Tappable header — toggles expand */}
+      <Pressable onPress={() => setExpanded((v) => !v)} style={styles.aiCardHeader}>
         <View style={styles.aiCardMeta}>
           <Text style={styles.aiCardTitle}>{suggestion.title}</Text>
           <Text style={styles.aiCardDesc} numberOfLines={expanded ? 0 : 2}>
             {suggestion.description}
           </Text>
           <View style={styles.aiCardChips}>
-            <Text style={styles.metaChip}>{suggestion.cuisine}</Text>
-            <Text style={styles.metaChip}>⏱ {suggestion.cookTime}</Text>
-            <Text style={styles.metaChip}>{suggestion.difficulty}</Text>
+            {suggestion.cookTime ? (
+              <Text style={styles.metaChip}>🕐 {suggestion.cookTime}</Text>
+            ) : null}
+            <Text style={styles.metaChip}>
+              {suggestion.difficulty === 'easy' ? '🟢' : suggestion.difficulty === 'medium' ? '🟡' : '🔴'}
+              {' '}{suggestion.difficulty}
+            </Text>
+            {suggestion.cuisine ? (
+              <Text style={styles.metaChip}>{suggestion.cuisine}</Text>
+            ) : null}
           </View>
         </View>
         <Text style={styles.expandIcon}>{expanded ? '▲' : '▼'}</Text>
-      </View>
+      </Pressable>
 
+      {/* Expanded body */}
       {expanded && (
         <View style={styles.aiCardBody}>
           <Text style={styles.aiCardSectionLabel}>Ingredients</Text>
@@ -330,7 +352,22 @@ function AISuggestionCard({ suggestion }: { suggestion: AISuggestedRecipe }) {
           ))}
         </View>
       )}
-    </Pressable>
+
+      {/* Save to library button */}
+      <Pressable
+        style={[styles.saveToLibraryBtn, savedId ? styles.saveToLibraryBtnDone : null]}
+        onPress={savedId ? () => router.push(`/recipe/${savedId}`) : handleSave}
+        disabled={saving}
+      >
+        {saving ? (
+          <ActivityIndicator size="small" color={Colors.primary} />
+        ) : (
+          <Text style={[styles.saveToLibraryText, savedId ? styles.saveToLibraryTextDone : null]}>
+            {savedId ? '✓ Saved — View Recipe' : '+ Save to Library'}
+          </Text>
+        )}
+      </Pressable>
+    </View>
   );
 }
 
@@ -593,5 +630,25 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     lineHeight: 18,
     marginBottom: 2,
+  },
+  saveToLibraryBtn: {
+    marginTop: Spacing.sm,
+    paddingVertical: Spacing.xs + 2,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+  },
+  saveToLibraryBtnDone: {
+    borderColor: Colors.success,
+    backgroundColor: `${Colors.success}14`,
+  },
+  saveToLibraryText: {
+    fontSize: FontSize.sm,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  saveToLibraryTextDone: {
+    color: Colors.success,
   },
 });

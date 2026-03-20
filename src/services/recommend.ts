@@ -70,6 +70,18 @@ export async function getAISuggestions(
   return res.json() as Promise<AISuggestedRecipe[]>;
 }
 
+export async function saveAISuggestionToLibrary(
+  suggestion: AISuggestedRecipe
+): Promise<{ id: string }> {
+  const res = await fetch(`${API_URL}/api/recipes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(suggestion),
+  });
+  if (!res.ok) throw new Error('Failed to save recipe to library');
+  return res.json() as Promise<{ id: string }>;
+}
+
 export async function getExpiringAlerts(): Promise<ExpiringAlert[]> {
   const res = await fetch(`${API_URL}/api/recommendations/expiring-alerts`);
   if (!res.ok) throw new Error('Failed to fetch expiring alerts');

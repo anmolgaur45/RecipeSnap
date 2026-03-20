@@ -4,7 +4,7 @@ import { db, DbRecipe, DbIngredient, DbStep } from '../db/schema';
 import { scaleIngredients } from '../services/servingScaler';
 import { adaptRecipe, isAdaptationType, ADAPTATION_LABELS } from '../services/recipeAdapter';
 import { substituteIngredient } from '../services/ingredientSubstituter';
-import { parseIngredient } from '../utils/ingredientParser';
+import { parseIngredient, classifyAisle } from '../utils/ingredientParser';
 import { calculateNutrition } from '../services/nutritionCalculator';
 
 // ── In-memory rate limiters ───────────────────────────────────────────────────
@@ -74,6 +74,71 @@ function hydrateRecipe(row: DbRecipe) {
     nutrition,
   };
 }
+
+/**
+ * POST /api/recipes — directly save an AI-suggested recipe to the library.
+ * Body: { title, description?, cuisine?, cookTime?, difficulty?, ingredients, steps }
+ */
+recipesRouter.post('/', (req: Request, res: Response) => {
+  const { title, description, cuisine, cookTime, difficulty, ingredients, steps } = req.body as {
+    title?: string;
+    description?: string;
+    cuisine?: string;
+    cookTime?: string;
+    difficulty?: string;
+    ingredients?: Array<{ item: string; quantity: string }>;
+    steps?: string[];
+  };
+
+  if (!title?.trim()) {
+    res.status(400).json({ error: 'title is required' });
+    return;
+  }
+  if (!Array.isArray(ingredients) || ingredients.length === 0) {
+    res.status(400).json({ error: 'ingredients array is required' });
+    return;
+  }
+  if (!Array.isArray(steps) || steps.length === 0) {
+    res.status(400).json({ error: 'steps array is required' });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const newId = uuid();
+
+  db.transaction(() => {
+    db.prepare(`
+      INSERT INTO recipes (id, title, description, servings, cookTime, difficulty, cuisine,
+        tags, confidence, createdAt, updatedAt, originalServings)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      newId, title.trim(), description ?? null, '2 servings',
+      cookTime ?? null, difficulty ?? 'medium', cuisine ?? null,
+      JSON.stringify(['ai-suggested']), 'medium', now, now, 2,
+    );
+
+    const insertIng = db.prepare(`
+      INSERT INTO ingredients (id, recipeId, item, quantity, category, isOptional, sortOrder, unit, numericQuantity)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    (ingredients as Array<{ item: string; quantity: string }>).forEach((ing, i) => {
+      const parsed = parseIngredient(`${ing.quantity} ${ing.item}`);
+      const category = classifyAisle(parsed.item);
+      insertIng.run(uuid(), newId, ing.item, ing.quantity, category, 0, i, parsed.unit, parsed.numericQuantity);
+    });
+
+    const insertStep = db.prepare(`
+      INSERT INTO steps (id, recipeId, stepNumber, instruction, duration, tip)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    (steps as string[]).forEach((instruction, i) => {
+      insertStep.run(uuid(), newId, i + 1, instruction, null, null);
+    });
+  })();
+
+  const saved = db.prepare('SELECT * FROM recipes WHERE id = ?').get(newId) as DbRecipe;
+  res.status(201).json(hydrateRecipe(saved));
+});
 
 /** GET /api/recipes — list all saved recipes */
 recipesRouter.get('/', (_req: Request, res: Response) => {
