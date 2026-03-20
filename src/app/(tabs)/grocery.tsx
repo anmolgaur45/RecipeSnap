@@ -7,7 +7,6 @@ import {
   Alert,
   Share,
   TextInput,
-  Modal,
   RefreshControl,
   StyleSheet,
   Animated,
@@ -114,18 +113,18 @@ function ItemRow({ item, recipeNames, onToggle, onDelete }: ItemRowProps) {
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onToggle();
         }}
-        style={[styles.itemRow, item.isChecked && styles.itemRowChecked]}
+        style={[styles.itemRow, !!item.isChecked && styles.itemRowChecked]}
       >
         {/* Checkbox */}
-        <View style={[styles.checkbox, item.isChecked && styles.checkboxChecked]}>
-          {item.isChecked && <Text style={styles.checkmark}>✓</Text>}
+        <View style={[styles.checkbox, !!item.isChecked && styles.checkboxChecked]}>
+          {!!item.isChecked && <Text style={styles.checkmark}>✓</Text>}
         </View>
 
         {/* Content */}
         <View style={styles.itemContent}>
           <View style={styles.itemTopRow}>
             <Text
-              style={[styles.itemName, item.isChecked && styles.itemNameChecked]}
+              style={[styles.itemName, !!item.isChecked && styles.itemNameChecked]}
               numberOfLines={1}
             >
               {item.item}
@@ -153,15 +152,14 @@ function ItemRow({ item, recipeNames, onToggle, onDelete }: ItemRowProps) {
   );
 }
 
-// ── Add Item Modal ────────────────────────────────────────────────────────────
+// ── Add Item Sheet content ────────────────────────────────────────────────────
 
-interface AddItemModalProps {
-  visible: boolean;
+interface AddItemSheetProps {
   onClose: () => void;
   onAdd: (text: string) => void;
 }
 
-function AddItemModal({ visible, onClose, onAdd }: AddItemModalProps) {
+function AddItemSheet({ onClose, onAdd }: AddItemSheetProps) {
   const [text, setText] = useState('');
 
   const handleAdd = () => {
@@ -173,46 +171,42 @@ function AddItemModal({ visible, onClose, onAdd }: AddItemModalProps) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <View style={styles.addItemSheet}>
-          <Text style={styles.addItemTitle}>Add item</Text>
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder="e.g. 2 cups flour, garlic..."
-            placeholderTextColor={Colors.textMuted}
-            style={styles.addItemInput}
-            autoFocus
-            onSubmitEditing={handleAdd}
-            returnKeyType="done"
-          />
-          <View style={styles.addItemButtons}>
-            <Pressable onPress={onClose} style={styles.addItemCancel}>
-              <Text style={{ color: Colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleAdd}
-              style={[styles.addItemConfirm, !text.trim() && { opacity: 0.4 }]}
-              disabled={!text.trim()}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700' }}>Add</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Pressable>
-    </Modal>
+    <View style={ss.sheetContent}>
+      <View style={ss.handle} />
+      <Text style={ss.sheetTitle}>Add item</Text>
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder="e.g. 2 cups flour, garlic..."
+        placeholderTextColor={Colors.textMuted}
+        style={styles.addItemInput}
+        autoFocus
+        onSubmitEditing={handleAdd}
+        returnKeyType="done"
+      />
+      <View style={styles.addItemButtons}>
+        <Pressable onPress={onClose} style={styles.addItemCancel}>
+          <Text style={{ color: Colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
+        </Pressable>
+        <Pressable
+          onPress={handleAdd}
+          style={[styles.addItemConfirm, !text.trim() && { opacity: 0.4 }]}
+          disabled={!text.trim()}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Add</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
-// ── Generate List Modal ───────────────────────────────────────────────────────
+// ── Generate List Sheet content ───────────────────────────────────────────────
 
-interface GenerateListModalProps {
-  visible: boolean;
+interface GenerateListSheetProps {
   onClose: () => void;
 }
 
-function GenerateListModal({ visible, onClose }: GenerateListModalProps) {
+function GenerateListSheet({ onClose }: GenerateListSheetProps) {
   const { recipes } = useRecipeStore();
   const { createList } = useGroceryStore();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -243,59 +237,56 @@ function GenerateListModal({ visible, onClose }: GenerateListModalProps) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <View style={[styles.addItemSheet, { maxHeight: '70%' }]}>
-          <Text style={styles.addItemTitle}>Generate Grocery List</Text>
-          <Text style={{ fontSize: 13, color: Colors.textSecondary, marginBottom: 12 }}>
-            Select recipes to include:
-          </Text>
+    <View style={[ss.sheetContent, { maxHeight: '70%' }]}>
+      <View style={ss.handle} />
+      <Text style={ss.sheetTitle}>Generate Grocery List</Text>
+      <Text style={{ fontSize: 13, color: Colors.textSecondary, marginBottom: 4 }}>
+        Select recipes to include:
+      </Text>
 
-          <SectionList
-            sections={[{ title: '', data: recipes }]}
-            keyExtractor={(r) => r.id}
-            renderItem={({ item: recipe }) => (
-              <Pressable
-                onPress={() => toggle(recipe.id)}
-                style={styles.recipeSelectRow}
-              >
-                <View style={[styles.recipeSelectCheck, selected.has(recipe.id) && styles.recipeSelectCheckOn]}>
-                  {selected.has(recipe.id) && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
-                </View>
-                <Text style={styles.recipeSelectName} numberOfLines={1}>{recipe.title}</Text>
-              </Pressable>
-            )}
-            renderSectionHeader={() => null}
-            style={{ maxHeight: 260 }}
-          />
-
+      <SectionList
+        sections={[{ title: '', data: recipes }]}
+        keyExtractor={(r) => r.id}
+        renderItem={({ item: recipe }) => (
           <Pressable
-            onPress={() => setSubtractPantry(!subtractPantry)}
-            style={styles.toggleRow}
+            onPress={() => toggle(recipe.id)}
+            style={styles.recipeSelectRow}
           >
-            <Text style={{ fontSize: 14, color: Colors.textPrimary }}>Exclude pantry items</Text>
-            <View style={[styles.toggle, subtractPantry && styles.toggleOn]}>
-              <View style={[styles.toggleThumb, subtractPantry && styles.toggleThumbOn]} />
+            <View style={[styles.recipeSelectCheck, selected.has(recipe.id) && styles.recipeSelectCheckOn]}>
+              {selected.has(recipe.id) && <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>}
             </View>
+            <Text style={styles.recipeSelectName} numberOfLines={1}>{recipe.title}</Text>
           </Pressable>
+        )}
+        renderSectionHeader={() => null}
+        style={{ maxHeight: 240 }}
+      />
 
-          <View style={styles.addItemButtons}>
-            <Pressable onPress={onClose} style={styles.addItemCancel}>
-              <Text style={{ color: Colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => { void handleGenerate(); }}
-              style={[styles.addItemConfirm, (selected.size === 0 || loading) && { opacity: 0.4 }]}
-              disabled={selected.size === 0 || loading}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700' }}>
-                {loading ? 'Building...' : `Generate (${selected.size})`}
-              </Text>
-            </Pressable>
-          </View>
+      <Pressable
+        onPress={() => setSubtractPantry(!subtractPantry)}
+        style={styles.toggleRow}
+      >
+        <Text style={{ fontSize: 14, color: Colors.textPrimary }}>Exclude pantry items</Text>
+        <View style={[styles.toggle, subtractPantry && styles.toggleOn]}>
+          <View style={[styles.toggleThumb, subtractPantry && styles.toggleThumbOn]} />
         </View>
       </Pressable>
-    </Modal>
+
+      <View style={styles.addItemButtons}>
+        <Pressable onPress={onClose} style={styles.addItemCancel}>
+          <Text style={{ color: Colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { void handleGenerate(); }}
+          style={[styles.addItemConfirm, (selected.size === 0 || loading) && { opacity: 0.4 }]}
+          disabled={selected.size === 0 || loading}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700' }}>
+            {loading ? 'Building...' : `Generate (${selected.size})`}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -306,13 +297,38 @@ export default function GroceryScreen() {
   const { activeList, lists, isLoading, fetchLists, toggleItem, addItem, deleteItem, archiveList, shareText } =
     useGroceryStore();
   const { recipes } = useRecipeStore();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showAddSheet, setShowAddSheet] = useState(false);
+  const [showGenerateSheet, setShowGenerateSheet] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  const addAnim = useRef(new Animated.Value(600)).current;
+  const generateAnim = useRef(new Animated.Value(600)).current;
 
   useEffect(() => {
     void fetchLists();
   }, []);
+
+  const openAdd = useCallback(() => {
+    setShowAddSheet(true);
+    addAnim.setValue(600);
+    Animated.spring(addAnim, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 280 }).start();
+  }, [addAnim]);
+
+  const closeAdd = useCallback(() => {
+    Animated.timing(addAnim, { toValue: 600, duration: 220, useNativeDriver: true })
+      .start(() => setShowAddSheet(false));
+  }, [addAnim]);
+
+  const openGenerate = useCallback(() => {
+    setShowGenerateSheet(true);
+    generateAnim.setValue(600);
+    Animated.spring(generateAnim, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 280 }).start();
+  }, [generateAnim]);
+
+  const closeGenerate = useCallback(() => {
+    Animated.timing(generateAnim, { toValue: 600, duration: 220, useNativeDriver: true })
+      .start(() => setShowGenerateSheet(false));
+  }, [generateAnim]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -415,7 +431,7 @@ export default function GroceryScreen() {
           </Text>
           {recipes.length > 0 ? (
             <Pressable
-              onPress={() => setShowGenerateModal(true)}
+              onPress={openGenerate}
               style={styles.emptyAction}
             >
               <Text style={styles.emptyActionText}>Generate from saved recipes</Text>
@@ -426,7 +442,19 @@ export default function GroceryScreen() {
             </Pressable>
           )}
         </View>
-        <GenerateListModal visible={showGenerateModal} onClose={() => setShowGenerateModal(false)} />
+
+        {/* Generate list overlay for empty state */}
+        {showGenerateSheet && (
+          <View style={[StyleSheet.absoluteFillObject, { justifyContent: 'flex-end' }]}>
+            <Pressable
+              style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+              onPress={closeGenerate}
+            />
+            <Animated.View style={[ss.sheet, { paddingBottom: insets.bottom + 16, transform: [{ translateY: generateAnim }] }]}>
+              <GenerateListSheet onClose={closeGenerate} />
+            </Animated.View>
+          </View>
+        )}
       </View>
     );
   }
@@ -510,7 +538,7 @@ export default function GroceryScreen() {
 
       {/* FAB — Add item */}
       <Pressable
-        onPress={() => setShowAddModal(true)}
+        onPress={openAdd}
         style={[styles.fab, { bottom: insets.bottom + 16 }]}
       >
         <Text style={styles.fabText}>+</Text>
@@ -518,21 +546,37 @@ export default function GroceryScreen() {
 
       {/* New list button */}
       <Pressable
-        onPress={() => setShowGenerateModal(true)}
+        onPress={openGenerate}
         style={[styles.newListBtn, { bottom: insets.bottom + 16 }]}
       >
         <Text style={styles.newListBtnText}>+ New list</Text>
       </Pressable>
 
-      <AddItemModal
-        visible={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onAdd={(text) => { void handleAddItem(text); }}
-      />
-      <GenerateListModal
-        visible={showGenerateModal}
-        onClose={() => setShowGenerateModal(false)}
-      />
+      {/* ── Add Item Overlay (inline — stays above tab bar) ── */}
+      {showAddSheet && (
+        <View style={[StyleSheet.absoluteFillObject, { justifyContent: 'flex-end' }]}>
+          <Pressable
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+            onPress={closeAdd}
+          />
+          <Animated.View style={[ss.sheet, { paddingBottom: insets.bottom + 16, transform: [{ translateY: addAnim }] }]}>
+            <AddItemSheet onClose={closeAdd} onAdd={(text) => { void handleAddItem(text); }} />
+          </Animated.View>
+        </View>
+      )}
+
+      {/* ── Generate List Overlay (inline — stays above tab bar) ── */}
+      {showGenerateSheet && (
+        <View style={[StyleSheet.absoluteFillObject, { justifyContent: 'flex-end' }]}>
+          <Pressable
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+            onPress={closeGenerate}
+          />
+          <Animated.View style={[ss.sheet, { paddingBottom: insets.bottom + 16, transform: [{ translateY: generateAnim }] }]}>
+            <GenerateListSheet onClose={closeGenerate} />
+          </Animated.View>
+        </View>
+      )}
     </View>
   );
 }
@@ -795,25 +839,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 15,
   },
-  // Add item modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  addItemSheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    paddingBottom: 40,
-    gap: 16,
-  },
-  addItemTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
+  // Sheet styles
   addItemInput: {
     borderWidth: 1,
     borderColor: Colors.border,
@@ -841,7 +867,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
   },
-  // Generate list modal
+  // Generate list sheet
   recipeSelectRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -892,5 +918,27 @@ const styles = StyleSheet.create({
   },
   toggleThumbOn: {
     transform: [{ translateX: 18 }],
+  },
+});
+
+const ss = StyleSheet.create({
+  sheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  sheetContent: {
+    padding: 24,
+    paddingTop: 16,
+    gap: 16,
+  },
+  handle: {
+    width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2,
+    alignSelf: 'center', marginBottom: 4,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
 });

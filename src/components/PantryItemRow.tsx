@@ -64,7 +64,7 @@ export function PantryItemRow({ item, onDelete, onEdit }: Props) {
             <Text style={styles.name} numberOfLines={1}>
               {item.displayName ?? item.item}
             </Text>
-            {item.isStaple && (
+            {!!item.isStaple && (
               <View style={styles.stapleBadge}>
                 <Text style={styles.stapleBadgeText}>staple</Text>
               </View>

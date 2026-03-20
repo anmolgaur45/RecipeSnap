@@ -1,8 +1,9 @@
 import {
   View, Text, TextInput, Pressable, SectionList,
-  Alert, ActivityIndicator, StyleSheet, ScrollView, Modal,
+  Alert, ActivityIndicator, StyleSheet, ScrollView, Animated,
 } from 'react-native';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { usePantryStore } from '@/store/pantryStore';
@@ -24,9 +25,9 @@ const DEFAULT_STAPLES = [
   'Flour', 'Butter', 'Garlic', 'Onions', 'Soy Sauce', 'Vinegar', 'Baking Powder',
 ];
 
-// ── Staple onboarding sheet ────────────────────────────────────────────────────
+// ── Staple onboarding sheet content ───────────────────────────────────────────
 
-function StapleOnboardingSheet({ visible, onDone }: { visible: boolean; onDone: () => void }) {
+function StapleOnboardingContent({ onDone }: { onDone: () => void }) {
   const [selected, setSelected] = useState<Set<string>>(new Set(['Salt', 'Black Pepper', 'Olive Oil', 'Sugar']));
   const setupStaples = usePantryStore((s) => s.setupStaples);
   const [saving, setSaving] = useState(false);
@@ -49,49 +50,41 @@ function StapleOnboardingSheet({ visible, onDone }: { visible: boolean; onDone: 
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={ss.backdrop}>
-        <View style={ss.sheet}>
-          <Text style={ss.sheetTitle}>📌 Set up your staples</Text>
-          <Text style={ss.sheetSubtitle}>Items you always have — never auto-removed from your pantry.</Text>
-          <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 4 }}>
-            {DEFAULT_STAPLES.map((name) => (
-              <Pressable
-                key={name}
-                onPress={() => toggle(name)}
-                style={[ss.stapleChip, selected.has(name) && ss.stapleChipActive]}
-              >
-                <Text style={[ss.stapleChipText, selected.has(name) && ss.stapleChipTextActive]}>
-                  {selected.has(name) ? '✓ ' : ''}{name}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-          <Pressable onPress={handleDone} style={ss.doneBtn} disabled={saving}>
-            {saving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={ss.doneBtnText}>Add {selected.size} staples</Text>}
+    <View style={ss.sheetContent}>
+      <View style={ss.handle} />
+      <Text style={ss.sheetTitle}>📌 Set up your staples</Text>
+      <Text style={ss.sheetSubtitle}>Items you always have — never auto-removed from your pantry.</Text>
+      <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 4 }}>
+        {DEFAULT_STAPLES.map((name) => (
+          <Pressable
+            key={name}
+            onPress={() => toggle(name)}
+            style={[ss.stapleChip, selected.has(name) && ss.stapleChipActive]}
+          >
+            <Text style={[ss.stapleChipText, selected.has(name) && ss.stapleChipTextActive]}>
+              {selected.has(name) ? '✓ ' : ''}{name}
+            </Text>
           </Pressable>
-        </View>
-      </View>
-    </Modal>
+        ))}
+      </ScrollView>
+      <Pressable onPress={handleDone} style={ss.doneBtn} disabled={saving}>
+        {saving
+          ? <ActivityIndicator color="#fff" />
+          : <Text style={ss.doneBtnText}>Add {selected.size} staples</Text>}
+      </Pressable>
+    </View>
   );
 }
 
-// ── Edit item sheet ────────────────────────────────────────────────────────────
+// ── Edit item sheet content ────────────────────────────────────────────────────
 
-function EditItemSheet({ item, visible, onClose }: { item: PantryItem | null; visible: boolean; onClose: () => void }) {
+function EditItemContent({ item, onClose }: { item: PantryItem; onClose: () => void }) {
   const updateItem = usePantryStore((s) => s.updateItem);
-  const [notes, setNotes] = useState('');
-  const [expiresAt, setExpiresAt] = useState('');
+  const [notes, setNotes] = useState(item.notes ?? '');
+  const [expiresAt, setExpiresAt] = useState(item.expiresAt ?? '');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (item) { setNotes(item.notes ?? ''); setExpiresAt(item.expiresAt ?? ''); }
-  }, [item]);
-
   const handleSave = async () => {
-    if (!item) return;
     setSaving(true);
     try {
       await updateItem(item.id, { notes: notes.trim() || null, expiresAt: expiresAt.trim() || null });
@@ -101,50 +94,73 @@ function EditItemSheet({ item, visible, onClose }: { item: PantryItem | null; vi
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={ss.backdrop}>
-        <View style={[ss.sheet, { paddingBottom: 32 }]}>
-          <Text style={ss.sheetTitle}>Edit {item?.displayName ?? item?.item}</Text>
-          <Text style={ss.label}>Expiry date (YYYY-MM-DD)</Text>
-          <TextInput
-            style={ss.input}
-            value={expiresAt}
-            onChangeText={setExpiresAt}
-            placeholder="e.g. 2026-03-25"
-            placeholderTextColor={Colors.textMuted}
-          />
-          <Text style={ss.label}>Notes</Text>
-          <TextInput
-            style={ss.input}
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="half used, frozen..."
-            placeholderTextColor={Colors.textMuted}
-          />
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-            <Pressable onPress={onClose} style={[ss.doneBtn, { flex: 1, backgroundColor: Colors.border }]}>
-              <Text style={[ss.doneBtnText, { color: Colors.textPrimary }]}>Cancel</Text>
-            </Pressable>
-            <Pressable onPress={handleSave} style={[ss.doneBtn, { flex: 1 }]} disabled={saving}>
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={ss.doneBtnText}>Save</Text>}
-            </Pressable>
-          </View>
-        </View>
+    <View style={ss.sheetContent}>
+      <View style={ss.handle} />
+      <Text style={ss.sheetTitle}>Edit {item.displayName ?? item.item}</Text>
+      <Text style={ss.label}>Expiry date (YYYY-MM-DD)</Text>
+      <TextInput
+        style={ss.input}
+        value={expiresAt}
+        onChangeText={setExpiresAt}
+        placeholder="e.g. 2026-03-25"
+        placeholderTextColor={Colors.textMuted}
+      />
+      <Text style={ss.label}>Notes</Text>
+      <TextInput
+        style={ss.input}
+        value={notes}
+        onChangeText={setNotes}
+        placeholder="half used, frozen..."
+        placeholderTextColor={Colors.textMuted}
+      />
+      <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+        <Pressable onPress={onClose} style={[ss.doneBtn, { flex: 1, backgroundColor: Colors.border }]}>
+          <Text style={[ss.doneBtnText, { color: Colors.textPrimary }]}>Cancel</Text>
+        </Pressable>
+        <Pressable onPress={handleSave} style={[ss.doneBtn, { flex: 1 }]} disabled={saving}>
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={ss.doneBtnText}>Save</Text>}
+        </Pressable>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 // ── Main PantryView ────────────────────────────────────────────────────────────
 
 export function PantryView() {
+  const insets = useSafeAreaInsets();
   const { items, isLoading, fetchPantry, deleteItem, quickAdd, getExpiringItems } = usePantryStore();
   const [quickAddText, setQuickAddText] = useState('');
   const [isQuickAdding, setIsQuickAdding] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [editingItem, setEditingItem] = useState<PantryItem | null>(null);
 
+  const editAnim = useRef(new Animated.Value(600)).current;
+  const onboardingAnim = useRef(new Animated.Value(600)).current;
+
   useEffect(() => { void fetchPantry(); }, []);
+
+  const openEdit = useCallback((item: PantryItem) => {
+    setEditingItem(item);
+    editAnim.setValue(600);
+    Animated.spring(editAnim, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 280 }).start();
+  }, [editAnim]);
+
+  const closeEdit = useCallback(() => {
+    Animated.timing(editAnim, { toValue: 600, duration: 220, useNativeDriver: true })
+      .start(() => setEditingItem(null));
+  }, [editAnim]);
+
+  const openOnboarding = useCallback(() => {
+    setShowOnboarding(true);
+    onboardingAnim.setValue(600);
+    Animated.spring(onboardingAnim, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 280 }).start();
+  }, [onboardingAnim]);
+
+  const closeOnboarding = useCallback(() => {
+    Animated.timing(onboardingAnim, { toValue: 600, duration: 220, useNativeDriver: true })
+      .start(() => setShowOnboarding(false));
+  }, [onboardingAnim]);
 
   const expiringItems = getExpiringItems();
   const expiredCount = expiringItems.filter((i) => i.expiryStatus === 'expired').length;
@@ -238,7 +254,7 @@ export function PantryView() {
           <Text style={styles.emptyEmoji}>🧊</Text>
           <Text style={styles.emptyTitle}>Your pantry is empty</Text>
           <Text style={styles.emptySubtitle}>Type ingredients above or set up your staples to get started.</Text>
-          <Pressable onPress={() => setShowOnboarding(true)} style={styles.setupBtn}>
+          <Pressable onPress={openOnboarding} style={styles.setupBtn}>
             <Text style={styles.setupBtnText}>Add Common Staples</Text>
           </Pressable>
         </View>
@@ -256,7 +272,7 @@ export function PantryView() {
             <PantryItemRow
               item={item}
               onDelete={() => { void deleteItem(item.id, item.isStaple); }}
-              onEdit={() => setEditingItem(item)}
+              onEdit={() => openEdit(item)}
             />
           )}
           ListFooterComponent={
@@ -269,8 +285,31 @@ export function PantryView() {
         />
       )}
 
-      <StapleOnboardingSheet visible={showOnboarding} onDone={() => setShowOnboarding(false)} />
-      <EditItemSheet item={editingItem} visible={!!editingItem} onClose={() => setEditingItem(null)} />
+      {/* ── Staple Onboarding Overlay (inline — stays above tab bar) ── */}
+      {showOnboarding && (
+        <View style={[StyleSheet.absoluteFillObject, { justifyContent: 'flex-end' }]}>
+          <Pressable
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+            onPress={closeOnboarding}
+          />
+          <Animated.View style={[ss.sheet, { paddingBottom: insets.bottom + 16, transform: [{ translateY: onboardingAnim }] }]}>
+            <StapleOnboardingContent onDone={closeOnboarding} />
+          </Animated.View>
+        </View>
+      )}
+
+      {/* ── Edit Item Overlay (inline — stays above tab bar) ── */}
+      {editingItem && (
+        <View style={[StyleSheet.absoluteFillObject, { justifyContent: 'flex-end' }]}>
+          <Pressable
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+            onPress={closeEdit}
+          />
+          <Animated.View style={[ss.sheet, { paddingBottom: insets.bottom + 16, transform: [{ translateY: editAnim }] }]}>
+            <EditItemContent item={editingItem} onClose={closeEdit} />
+          </Animated.View>
+        </View>
+      )}
     </View>
   );
 }
@@ -321,10 +360,19 @@ const styles = StyleSheet.create({
 });
 
 const ss = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: Colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 24, gap: 12,
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  sheetContent: {
+    padding: 24,
+    paddingTop: 16,
+    gap: 12,
+  },
+  handle: {
+    width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2,
+    alignSelf: 'center', marginBottom: 8,
   },
   sheetTitle: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
   sheetSubtitle: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
