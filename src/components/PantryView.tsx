@@ -8,7 +8,8 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { usePantryStore } from '@/store/pantryStore';
 import { PantryItemRow } from './PantryItemRow';
-import { Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing, BorderRadius, FontSize } from '@/constants/theme';
+import { INGREDIENT_SUGGESTIONS } from '@/constants/ingredientSuggestions';
 import type { PantryItem } from '@/store/types';
 
 // ── Category config ────────────────────────────────────────────────────────────
@@ -17,6 +18,18 @@ const CATEGORY_EMOJI: Record<string, string> = {
   produce: '🥬', dairy: '🧀', meat: '🥩', bakery: '🍞',
   frozen: '🧊', spices: '🌶️', pantry: '🥫', beverages: '🥤', other: '🛒',
 };
+
+function guessCategoryEmoji(name: string): string {
+  const n = name.toLowerCase();
+  if (/chicken|beef|lamb|pork|steak|salmon|tuna|shrimp|meat|ground/.test(n)) return '🥩';
+  if (/milk|cheese|butter|yogurt|cream|ghee|paneer|mozzarella|parmesan/.test(n)) return '🧀';
+  if (/rice|flour|pasta|bread|oats|noodles|semolina|poha|sooji|quinoa|couscous|cornmeal/.test(n)) return '🍞';
+  if (/tomato|onion|garlic|potato|spinach|carrot|capsicum|mushroom|lemon|lime|ginger|coriander|mint|cucumber|eggplant|cauliflower|broccoli|cabbage/.test(n)) return '🥬';
+  if (/cumin|turmeric|pepper|chili|garam|masala|cardamom|cinnamon|clove|mustard|fennel|fenugreek|paprika|oregano|thyme|basil|rosemary|bay/.test(n)) return '🌶️';
+  if (/oil|sugar|salt|honey|vinegar|sauce|ketchup|soy|coconut|baking|jaggery|maple|cornstarch/.test(n)) return '🥫';
+  if (/egg/.test(n)) return '🥚';
+  return '🛒';
+}
 
 const CATEGORY_ORDER = ['produce', 'dairy', 'meat', 'bakery', 'frozen', 'spices', 'pantry', 'beverages', 'other'];
 
@@ -129,11 +142,12 @@ function EditItemContent({ item, onClose }: { item: PantryItem; onClose: () => v
 
 export function PantryView() {
   const insets = useSafeAreaInsets();
-  const { items, isLoading, fetchPantry, deleteItem, quickAdd, getExpiringItems } = usePantryStore();
+  const { items, isLoading, fetchPantry, deleteItem, quickAdd, addItem, getExpiringItems } = usePantryStore();
   const [quickAddText, setQuickAddText] = useState('');
   const [isQuickAdding, setIsQuickAdding] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [editingItem, setEditingItem] = useState<PantryItem | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   const editAnim = useRef(new Animated.Value(600)).current;
   const onboardingAnim = useRef(new Animated.Value(600)).current;
@@ -166,8 +180,35 @@ export function PantryView() {
   const expiredCount = expiringItems.filter((i) => i.expiryStatus === 'expired').length;
   const expiringSoonCount = expiringItems.filter((i) => i.expiryStatus === 'expiring_soon').length;
 
+  // ── Autocomplete suggestions ─────────────────────────────────────────────────
+  useEffect(() => {
+    const query = quickAddText.trim().toLowerCase();
+    if (query.length < 2) { setSuggestions([]); return; }
+
+    const startsWith = INGREDIENT_SUGGESTIONS.filter((s) =>
+      s.toLowerCase().startsWith(query)
+    );
+    const contains = INGREDIENT_SUGGESTIONS.filter((s) =>
+      !s.toLowerCase().startsWith(query) && s.toLowerCase().includes(query)
+    );
+    // Also surface matching names already in the user's pantry
+    const pantryNames = items
+      .map((i) => i.displayName ?? i.item)
+      .filter((name) => {
+        const lc = name.toLowerCase();
+        return (
+          lc.includes(query) &&
+          !startsWith.some((s) => s.toLowerCase() === lc) &&
+          !contains.some((s) => s.toLowerCase() === lc)
+        );
+      });
+
+    setSuggestions([...startsWith, ...contains, ...pantryNames].slice(0, 6));
+  }, [quickAddText, items]);
+
   const handleQuickAdd = async () => {
     if (!quickAddText.trim()) return;
+    setSuggestions([]);
     setIsQuickAdding(true);
     try {
       await quickAdd(quickAddText.trim());
@@ -223,6 +264,7 @@ export function PantryView() {
           placeholderTextColor={Colors.textMuted}
           returnKeyType="done"
           onSubmitEditing={handleQuickAdd}
+          onBlur={() => setTimeout(() => setSuggestions([]), 150)}
           editable={!isQuickAdding}
         />
         <Pressable
@@ -235,6 +277,38 @@ export function PantryView() {
             : <Text style={styles.quickAddBtnText}>Add</Text>}
         </Pressable>
       </View>
+
+      {/* Suggestion list — inline flow, no z-index issues */}
+      {suggestions.length > 0 && (
+        <View style={styles.suggestionList}>
+          {suggestions.map((s, idx) => (
+            <Pressable
+              key={s}
+              style={({ pressed }) => [
+                styles.suggestionItem,
+                pressed && styles.suggestionItemPressed,
+                idx === suggestions.length - 1 && { borderBottomWidth: 0 },
+              ]}
+              onPress={() => {
+                setSuggestions([]);
+                setQuickAddText('');
+                // Use addItem (direct DB insert, no AI) for instant optimistic add
+                void addItem({ name: s, displayName: s })
+                  .then(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))
+                  .catch((e: Error) => Alert.alert('Could not add item', e.message));
+              }}
+            >
+              <View style={styles.suggestionItemInner}>
+                <View style={styles.suggestionEmojiBox}>
+                  <Text style={styles.suggestionEmoji}>{guessCategoryEmoji(s)}</Text>
+                </View>
+                <Text style={styles.suggestionItemText}>{s}</Text>
+                <Text style={styles.suggestionPlus}>+</Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       {/* Expiry banners */}
       {expiredCount > 0 && (
@@ -323,6 +397,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row', gap: 8, padding: Spacing.md,
     backgroundColor: Colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border,
+  },
+  suggestionList: {
+    marginHorizontal: Spacing.md,
+    marginTop: 4,
+    marginBottom: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.09,
+    shadowRadius: 8,
+  },
+  suggestionItem: {
+    paddingVertical: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  suggestionItemPressed: {
+    backgroundColor: `${Colors.primary}0C`,
+  },
+  suggestionItemInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+  },
+  suggestionEmojiBox: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  suggestionEmoji: {
+    fontSize: 16,
+  },
+  suggestionItemText: {
+    flex: 1,
+    fontSize: FontSize.md,
+    color: Colors.textPrimary,
+    fontWeight: '500',
+  },
+  suggestionPlus: {
+    fontSize: 20,
+    color: Colors.primary,
+    fontWeight: '300',
+    marginLeft: Spacing.sm,
   },
   quickAddInput: {
     flex: 1, height: 42, borderRadius: 10, paddingHorizontal: 12,

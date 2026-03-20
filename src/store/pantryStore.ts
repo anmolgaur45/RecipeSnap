@@ -51,16 +51,32 @@ export const usePantryStore = create<PantryState>((set, get) => ({
   },
 
   addItem: async (params) => {
-    const item = await addPantryItem(params);
-    set((s) => {
-      // Merge or add
-      const exists = s.items.find((i) => i.id === item.id);
-      if (exists) {
-        return { items: s.items.map((i) => (i.id === item.id ? item : i)) };
-      }
-      return { items: [...s.items, item] };
-    });
-    return item;
+    // Optimistic: insert a placeholder immediately so the UI feels instant
+    const tempId = -Date.now();
+    const tempItem = {
+      id: tempId,
+      item: params.name,
+      displayName: params.displayName ?? params.name,
+      quantity: params.quantity != null ? String(params.quantity) : null,
+      unit: params.unit ?? null,
+      category: (params.category as import('./types').GroceryAisle) ?? null,
+      addedAt: new Date().toISOString(),
+      expiresAt: params.expiresAt ?? null,
+      isStaple: params.isStaple ?? false,
+      notes: params.notes ?? null,
+      expiryStatus: 'fresh' as const,
+    };
+    set((s) => ({ items: [...s.items, tempItem] }));
+    try {
+      const item = await addPantryItem(params);
+      // Replace placeholder with the real server item
+      set((s) => ({ items: s.items.map((i) => (i.id === tempId ? item : i)) }));
+      return item;
+    } catch (e) {
+      // Revert on failure
+      set((s) => ({ items: s.items.filter((i) => i.id !== tempId) }));
+      throw e;
+    }
   },
 
   updateItem: async (id, updates) => {
