@@ -6,8 +6,8 @@ import {
   Pressable,
   ScrollView,
   Alert,
-  SafeAreaView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
@@ -21,6 +21,7 @@ import { PlatformIcon } from '@/components/PlatformIcon';
 import { SUPPORTED_PLATFORMS } from '@/constants/config';
 
 export default function AddScreen() {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ url?: string }>();
   const { extractRecipe, isProcessing, processingStatus, error, clearError } = useRecipeStore();
 
@@ -90,8 +91,7 @@ export default function AddScreen() {
         end={{ x: 1, y: 1 }}
         style={{ paddingBottom: 28, paddingHorizontal: Spacing.md }}
       >
-        <SafeAreaView>
-          <View style={{ paddingTop: Spacing.lg }}>
+        <View style={{ paddingTop: insets.top + 8 }}>
             <Text style={{ fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: -0.5 }}>
               Extract a Recipe
             </Text>
@@ -99,7 +99,6 @@ export default function AddScreen() {
               Share any cooking video from Instagram, TikTok or YouTube
             </Text>
           </View>
-        </SafeAreaView>
       </LinearGradient>
 
       <ScrollView

@@ -108,15 +108,76 @@ export interface Recipe {
 
 // ── Pantry ────────────────────────────────────────────────────────────────────
 
+export type ExpiryStatus = 'fresh' | 'expiring_soon' | 'expired';
+
 export interface PantryItem {
   id: number;
   item: string;
+  displayName: string | null;
   quantity: string | null;
   unit: string | null;
   category: GroceryAisle | null;
   addedAt: string;
   expiresAt: string | null;
   isStaple: boolean;
+  notes: string | null;
+  expiryStatus: ExpiryStatus;
+}
+
+// ── Meal Plans ────────────────────────────────────────────────────────────────
+
+export type MealSlot = 'breakfast' | 'morning_snack' | 'lunch' | 'evening_snack' | 'dinner';
+
+export interface MealPlanEntry {
+  id: number;
+  mealPlanId: number;
+  recipeId: string;
+  date: string;
+  mealSlot: MealSlot;
+  servings: number;
+  isCooked: boolean;
+  cookedAt: string | null;
+  sortOrder: number;
+  notes: string | null;
+  // Hydrated fields (populated when fetching plan with entries)
+  recipeTitle?: string;
+  recipeCuisine?: string | null;
+  recipeTime?: string | null;
+  nutrition?: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number;
+  } | null;
+}
+
+export interface MealPlan {
+  id: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  entries?: MealPlanEntry[];
+}
+
+export interface NutritionGoal {
+  id: number;
+  caloriesTarget: number;
+  proteinTarget: number;
+  carbsTarget: number;
+  fatTarget: number;
+  fiberTarget: number;
+  isActive: boolean;
+}
+
+export interface DayNutrition {
+  date: string;
+  totals: { calories: number; protein: number; carbs: number; fat: number; fiber: number };
+  goals: NutritionGoal;
+  percentages: { calories: number; protein: number; carbs: number; fat: number; fiber: number };
 }
 
 // ── Grocery lists ─────────────────────────────────────────────────────────────

@@ -140,6 +140,56 @@ export function initDb(): void {
       cached_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- ── Meal plans ───────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS meal_plans (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      name      TEXT NOT NULL,
+      startDate TEXT NOT NULL,
+      endDate   TEXT NOT NULL,
+      isActive  INTEGER NOT NULL DEFAULT 1,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS meal_plan_entries (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      mealPlanId   INTEGER NOT NULL REFERENCES meal_plans(id) ON DELETE CASCADE,
+      recipeId     TEXT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+      date         TEXT NOT NULL,
+      mealSlot     TEXT NOT NULL,
+      servings     INTEGER NOT NULL DEFAULT 2,
+      isCooked     INTEGER NOT NULL DEFAULT 0,
+      cookedAt     TEXT,
+      sortOrder    INTEGER NOT NULL DEFAULT 0,
+      notes        TEXT
+    );
+
+    -- ── Nutrition goals ───────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS nutrition_goals (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      caloriesTarget  INTEGER NOT NULL DEFAULT 2000,
+      proteinTarget   REAL NOT NULL DEFAULT 50,
+      carbsTarget     REAL NOT NULL DEFAULT 250,
+      fatTarget       REAL NOT NULL DEFAULT 65,
+      fiberTarget     REAL NOT NULL DEFAULT 30,
+      isActive        INTEGER NOT NULL DEFAULT 1,
+      createdAt       TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt       TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- ── Cook sessions ─────────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS cook_sessions (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      recipeId         TEXT NOT NULL REFERENCES recipes(id),
+      mealPlanEntryId  INTEGER REFERENCES meal_plan_entries(id),
+      startedAt        TEXT NOT NULL DEFAULT (datetime('now')),
+      completedAt      TEXT,
+      servingsCooked   INTEGER NOT NULL DEFAULT 2,
+      rating           INTEGER,
+      notes            TEXT,
+      photoUri         TEXT
+    );
+
     -- ── Indexes ──────────────────────────────────────────────────────────────
     CREATE INDEX IF NOT EXISTS idx_ingredients_recipe    ON ingredients(recipeId);
     CREATE INDEX IF NOT EXISTS idx_steps_recipe          ON steps(recipeId, stepNumber);
@@ -149,6 +199,9 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_recipe_tags_recipe    ON recipe_tags(recipeId);
     CREATE INDEX IF NOT EXISTS idx_recipe_coll_recipe    ON recipe_collections(recipeId);
     CREATE INDEX IF NOT EXISTS idx_recipe_adapt_original ON recipe_adaptations(originalRecipeId);
+    CREATE INDEX IF NOT EXISTS idx_meal_plan_entries_date ON meal_plan_entries(date);
+    CREATE INDEX IF NOT EXISTS idx_meal_plan_entries_plan ON meal_plan_entries(mealPlanId);
+    CREATE INDEX IF NOT EXISTS idx_cook_sessions_recipe   ON cook_sessions(recipeId);
   `);
 
   // ── Column migrations on existing tables (idempotent) ────────────────────
@@ -180,6 +233,16 @@ export function initDb(): void {
 
   // recipes — nutrition confidence
   addColumnIfNotExists('recipes', 'nutritionConfidence', 'TEXT');
+
+  // pantry — display name and notes
+  addColumnIfNotExists('pantry', 'displayName', 'TEXT');
+  addColumnIfNotExists('pantry', 'notes',       'TEXT');
+
+  // nutrition_goals — seed default row if table is empty
+  const goalCount = (db.prepare('SELECT COUNT(*) as c FROM nutrition_goals').get() as { c: number }).c;
+  if (goalCount === 0) {
+    db.prepare('INSERT INTO nutrition_goals (caloriesTarget, proteinTarget, carbsTarget, fatTarget, fiberTarget) VALUES (2000, 50, 250, 65, 30)').run();
+  }
 }
 
 // ── TypeScript interfaces ─────────────────────────────────────────────────────
@@ -243,12 +306,14 @@ export interface DbStep {
 export interface DbPantryItem {
   id: number;
   item: string;
+  displayName: string | null;
   quantity: string | null;
   unit: string | null;
   category: string | null;
   addedAt: string;
   expiresAt: string | null;
   isStaple: number;
+  notes: string | null;
 }
 
 export interface DbGroceryList {
@@ -307,4 +372,51 @@ export interface DbNutritionCache {
   sodium_100g: number;
   source: string;
   cached_at: string;
+}
+
+export interface DbMealPlan {
+  id: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  isActive: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DbMealPlanEntry {
+  id: number;
+  mealPlanId: number;
+  recipeId: string;
+  date: string;
+  mealSlot: string;
+  servings: number;
+  isCooked: number;
+  cookedAt: string | null;
+  sortOrder: number;
+  notes: string | null;
+}
+
+export interface DbNutritionGoal {
+  id: number;
+  caloriesTarget: number;
+  proteinTarget: number;
+  carbsTarget: number;
+  fatTarget: number;
+  fiberTarget: number;
+  isActive: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DbCookSession {
+  id: number;
+  recipeId: string;
+  mealPlanEntryId: number | null;
+  startedAt: string;
+  completedAt: string | null;
+  servingsCooked: number;
+  rating: number | null;
+  notes: string | null;
+  photoUri: string | null;
 }

@@ -7,13 +7,15 @@ import {
   Pressable,
   ScrollView,
   RefreshControl,
-  SafeAreaView,
   Alert,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useRecipeStore } from '@/store/recipeStore';
 import { RecipeCard } from '@/components/RecipeCard';
 import { RecipeCardSkeleton } from '@/components/RecipeCardSkeleton';
+import { PantryView } from '@/components/PantryView';
 import { Colors, Spacing } from '@/constants/theme';
 import { Collection, Recipe, TagGroup } from '@/store/types';
 import {
@@ -36,8 +38,10 @@ function filterKey(type: string, value: string) {
 }
 
 export default function LibraryScreen() {
+  const insets = useSafeAreaInsets();
   const { recipes, isSyncing, syncRecipes } = useRecipeStore();
 
+  const [activeSegment, setActiveSegment] = useState<'recipes' | 'pantry'>('recipes');
   const [search, setSearch] = useState('');
   const [activeFilters, setActiveFilters] = useState<Map<string, string>>(new Map());
   const [sort, setSort] = useState<'recent' | 'alpha'>('recent');
@@ -158,13 +162,14 @@ export default function LibraryScreen() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
+    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <View style={{
         backgroundColor: Colors.surface,
         paddingHorizontal: Spacing.md,
-        paddingTop: Spacing.md,
+        paddingTop: insets.top + 8,
         paddingBottom: 12,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -172,7 +177,49 @@ export default function LibraryScreen() {
         shadowRadius: 8,
         elevation: 4,
       }}>
-        {/* Title row */}
+        {/* Segment control */}
+        <View style={{ flexDirection: 'row', backgroundColor: Colors.background, borderRadius: 12, padding: 3, marginBottom: 12 }}>
+          {(['recipes', 'pantry'] as const).map((seg) => (
+            <Pressable
+              key={seg}
+              onPress={() => setActiveSegment(seg)}
+              style={{
+                flex: 1, paddingVertical: 7, borderRadius: 10, alignItems: 'center',
+                backgroundColor: activeSegment === seg ? Colors.surface : 'transparent',
+                shadowColor: activeSegment === seg ? '#000' : 'transparent',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.08,
+                shadowRadius: 3,
+                elevation: activeSegment === seg ? 2 : 0,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Text style={{ fontSize: 15 }}>{seg === 'recipes' ? '📚' : '🥫'}</Text>
+                <Text style={{
+                  fontSize: 14, fontWeight: '700',
+                  color: activeSegment === seg ? Colors.textPrimary : Colors.textMuted,
+                }}>
+                  {seg === 'recipes' ? 'Recipes' : 'Pantry'}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Pantry title — only when pantry segment active */}
+        {activeSegment === 'pantry' && (
+          <View style={{ paddingBottom: 4 }}>
+            <Text style={{ fontSize: 24, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 }}>
+              My Pantry
+            </Text>
+            <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 1 }}>
+              Track ingredients &amp; reduce waste
+            </Text>
+          </View>
+        )}
+
+        {/* Title row + search + filters — only for recipes segment */}
+        {activeSegment === 'recipes' && (<>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 24, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 }}>
@@ -301,10 +348,11 @@ export default function LibraryScreen() {
             </Pressable>
           </View>
         )}
+        </>)}
       </View>
 
       {/* ── Collections row ──────────────────────────────────────────────────── */}
-      <View style={{
+      {activeSegment === 'recipes' && (<View style={{
         backgroundColor: Colors.surface,
         borderBottomWidth: 1, borderBottomColor: '#EDEBE6',
         paddingVertical: 10,
@@ -405,10 +453,12 @@ export default function LibraryScreen() {
             );
           })}
         </ScrollView>
-      </View>
+      </View>)}
 
       {/* ── Content ──────────────────────────────────────────────────────────── */}
-      {isSyncing && recipes.length === 0 ? (
+      {activeSegment === 'pantry' ? (
+        <PantryView />
+      ) : isSyncing && recipes.length === 0 ? (
         <FlatList
           data={[1, 2, 3]}
           keyExtractor={(i) => String(i)}
@@ -483,6 +533,6 @@ export default function LibraryScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }

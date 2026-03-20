@@ -6,8 +6,9 @@ import {
   RefreshControl,
   Pressable,
   TextInput,
-  SafeAreaView,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useRecipeStore } from '@/store/recipeStore';
 import { RecipeCard } from '@/components/RecipeCard';
@@ -17,6 +18,7 @@ import { MAX_RECENT_RECIPES } from '@/constants/config';
 import { isValidVideoUrl } from '@/utils/formatters';
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const { recipes, isSyncing, syncRecipes } = useRecipeStore();
   const [quickUrl, setQuickUrl] = useState('');
 
@@ -39,7 +41,8 @@ export default function HomeScreen() {
   const topCuisine = Object.entries(cuisineCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
+    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: Spacing.xl }}
@@ -47,7 +50,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Custom header */}
-        <View style={{ paddingHorizontal: Spacing.md, paddingTop: Spacing.lg, paddingBottom: Spacing.md }}>
+        <View style={{ paddingHorizontal: Spacing.md, paddingTop: insets.top + 8, paddingBottom: Spacing.md }}>
           <Text style={{ fontSize: 30, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 }}>
             RecipeSnap
           </Text>
@@ -149,6 +152,6 @@ export default function HomeScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

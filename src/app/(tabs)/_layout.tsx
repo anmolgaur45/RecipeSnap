@@ -48,11 +48,19 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="add"
+        name="plan"
         options={{
-          title: 'Extract',
+          title: 'Plan',
           headerShown: false,
-          tabBarIcon: ({ focused }) => tabIcon(focused, 'add-circle', 'add-circle-outline'),
+          tabBarIcon: ({ focused }) => tabIcon(focused, 'calendar', 'calendar-outline'),
+        }}
+      />
+      <Tabs.Screen
+        name="grocery"
+        options={{
+          title: 'Grocery',
+          headerShown: false,
+          tabBarIcon: ({ focused }) => tabIcon(focused, 'cart', 'cart-outline'),
         }}
       />
       <Tabs.Screen
@@ -63,12 +71,11 @@ export default function TabLayout() {
           tabBarIcon: ({ focused }) => tabIcon(focused, 'bookmarks', 'bookmarks-outline'),
         }}
       />
+      {/* add.tsx hidden from tab bar — still accessible via deep links */}
       <Tabs.Screen
-        name="grocery"
+        name="add"
         options={{
-          title: 'Grocery',
-          headerShown: false,
-          tabBarIcon: ({ focused }) => tabIcon(focused, 'cart', 'cart-outline'),
+          href: null,
         }}
       />
     </Tabs>
