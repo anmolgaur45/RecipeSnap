@@ -124,6 +124,19 @@ export interface PantryItem {
   expiryStatus: ExpiryStatus;
 }
 
+// ── Cook Sessions ─────────────────────────────────────────────────────────────
+
+export interface CookSession {
+  id: number;
+  recipeId: string;
+  mealPlanEntryId: number | null;
+  startedAt: string;
+  completedAt: string | null;
+  servingsCooked: number;
+  rating: number | null;
+  notes: string | null;
+}
+
 // ── Meal Plans ────────────────────────────────────────────────────────────────
 
 export type MealSlot = 'breakfast' | 'morning_snack' | 'lunch' | 'evening_snack' | 'dinner';

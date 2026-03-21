@@ -694,6 +694,16 @@ export default function RecipeDetailScreen() {
 
         {/* Actions */}
         <View style={{ paddingHorizontal: Spacing.md, marginTop: 32, gap: 10 }}>
+          {/* Start Cooking button */}
+          <Pressable
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push(`/cook/${recipe.id}`);
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 15 }}
+          >
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>{'🔥  Start Cooking'}</Text>
+          </Pressable>
           {/* Grocery list button */}
           <Pressable
             onPress={handleAddToGrocery}
