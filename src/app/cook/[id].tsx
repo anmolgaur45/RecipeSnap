@@ -12,12 +12,14 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { useKeepAwake } from 'expo-keep-awake';
 import { useRecipeStore } from '@/store/recipeStore';
 import { useCookStore } from '@/store/cookStore';
 import CookModeStep from '@/components/CookModeStep';
 import { Colors, Spacing, BorderRadius, FontSize, Shadow } from '@/constants/theme';
 
 export default function CookScreen() {
+  useKeepAwake();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const recipe = useRecipeStore((s) => s.recipes.find((r) => r.id === id));
@@ -34,6 +36,7 @@ export default function CookScreen() {
   } = useCookStore();
 
   const [isStarting, setIsStarting] = useState(false);
+  const [autoRead, setAutoRead] = useState(false);
   const [showRating, setShowRating] = useState(false);
   const [selectedRating, setSelectedRating] = useState(0);
   const [notes, setNotes] = useState('');
@@ -130,7 +133,16 @@ export default function CookScreen() {
           <Text style={styles.closeBtnText}>✕</Text>
         </Pressable>
         <Text style={styles.recipeTitle} numberOfLines={1}>{recipe.title}</Text>
-        <View style={styles.closeBtn} />
+        <Pressable
+          onPress={() => {
+            setAutoRead((v) => !v);
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={[styles.closeBtn, styles.autoReadBtn, autoRead && styles.autoReadBtnActive]}
+          hitSlop={8}
+        >
+          <Text style={styles.autoReadIcon}>{'🔊'}</Text>
+        </Pressable>
       </View>
 
       {/* Progress bar */}
@@ -144,6 +156,7 @@ export default function CookScreen() {
           step={currentStep}
           stepIndex={currentStepIndex}
           totalSteps={totalSteps}
+          autoRead={autoRead}
         />
       ) : null}
 
@@ -410,5 +423,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: FontSize.md,
     fontWeight: '700',
+  },
+
+  // Auto-read toggle
+  autoReadBtn: {
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  autoReadBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  autoReadIcon: {
+    fontSize: FontSize.md,
   },
 });

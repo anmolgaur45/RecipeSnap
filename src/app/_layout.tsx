@@ -79,6 +79,7 @@ export default function RootLayout() {
             headerTintColor: '#FF6B35',
           }}
         />
+        <Stack.Screen name="cook/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="recommendations" options={{ headerShown: false }} />
       </Stack>
     </GestureHandlerRootView>
