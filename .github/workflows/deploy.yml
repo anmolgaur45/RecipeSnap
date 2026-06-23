@@ -1,0 +1,72 @@
+name: deploy
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+  id-token: write # workload identity federation
+
+# Inert until infra exists: set repo variable DEPLOY_ENABLED=true after Part B.
+jobs:
+  deploy:
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT }}
+      REGION: ${{ vars.GCP_REGION }}
+      IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/${{ vars.ARTIFACT_REPO }}/recipesnap-server:${{ github.sha }}
+      # Secret Manager secrets, mounted as env vars on both services
+      SECRETS: >-
+        DATABASE_URL=recipesnap-database-url:latest,
+        SUPABASE_URL=recipesnap-supabase-url:latest,
+        SUPABASE_SERVICE_ROLE_KEY=recipesnap-supabase-service-role-key:latest,
+        ANTHROPIC_API_KEY=recipesnap-anthropic-api-key:latest,
+        OPENAI_API_KEY=recipesnap-openai-api-key:latest,
+        USDA_API_KEY=recipesnap-usda-api-key:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: build image
+        run: gcloud builds submit server --tag "$IMAGE" --project "$PROJECT" --quiet
+
+      # Worker first so its URL is known when deploying the API. Internal-only:
+      # Cloud Run IAM allows just the Cloud Tasks invoker SA to call it.
+      - name: deploy worker
+        run: |
+          gcloud run deploy recipesnap-worker \
+            --image "$IMAGE" --project "$PROJECT" --region "$REGION" \
+            --service-account "${{ vars.RUNTIME_SA }}" \
+            --no-allow-unauthenticated \
+            --memory 2Gi --cpu 2 --timeout 1800 --concurrency 1 \
+            --max-instances 2 \
+            --set-secrets "$SECRETS" \
+            --set-env-vars "NODE_ENV=production,SUPABASE_STORAGE_BUCKET=${{ vars.SUPABASE_STORAGE_BUCKET }},WORKER_INVOKER_SA=${{ vars.WORKER_INVOKER_SA }}" \
+            --quiet
+
+      - name: resolve worker url
+        run: |
+          WORKER_URL=$(gcloud run services describe recipesnap-worker \
+            --project "$PROJECT" --region "$REGION" --format='value(status.url)')
+          echo "WORKER_URL=$WORKER_URL" >> "$GITHUB_ENV"
+
+      # API is public (mobile clients authenticate with a Supabase JWT) and
+      # dispatches extraction jobs to the worker via Cloud Tasks.
+      - name: deploy api
+        run: |
+          gcloud run deploy recipesnap-api \
+            --image "$IMAGE" --project "$PROJECT" --region "$REGION" \
+            --service-account "${{ vars.RUNTIME_SA }}" \
+            --allow-unauthenticated \
+            --memory 512Mi --cpu 1 --timeout 60 --max-instances 3 \
+            --set-secrets "$SECRETS" \
+            --set-env-vars "NODE_ENV=production,SUPABASE_STORAGE_BUCKET=${{ vars.SUPABASE_STORAGE_BUCKET }},CORS_ORIGIN=${{ vars.CORS_ORIGIN }},GCP_PROJECT=${{ vars.GCP_PROJECT }},GCP_LOCATION=${{ vars.GCP_REGION }},CLOUD_TASKS_QUEUE=${{ vars.CLOUD_TASKS_QUEUE }},WORKER_INVOKER_SA=${{ vars.WORKER_INVOKER_SA }},WORKER_URL=${WORKER_URL}" \
+            --quiet

@@ -7,9 +7,12 @@ import {
   doublePrecision,
   serial,
   timestamp,
+  jsonb,
   primaryKey,
   index,
 } from 'drizzle-orm/pg-core';
+import type { JobProgress } from '../queue/jobStore';
+import type { ExtractionResult } from '../routes/extract';
 
 // Multi-tenant Postgres schema (Supabase). Top-level tables carry user_id.
 // The user_id -> auth.users foreign keys and RLS are added in Phase 2 when
@@ -293,6 +296,24 @@ export const cookSessions = pgTable(
   }),
 );
 
+// Durable extraction job state. Polled by the client across instances, so it
+// cannot live in process memory once the API runs on multiple Cloud Run nodes.
+export const extractionJobs = pgTable(
+  'extraction_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull(),
+    url: text('url').notNull(),
+    status: text('status').notNull().default('queued'),
+    progress: jsonb('progress').$type<JobProgress[]>().notNull().default([]),
+    result: jsonb('result').$type<ExtractionResult>(),
+    error: text('error'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({ userCreatedIdx: index('idx_jobs_user_created').on(t.userId, t.createdAt) }),
+);
+
 // Inferred row types for the query layer.
 export type DbRecipe = typeof recipes.$inferSelect;
 export type DbIngredient = typeof ingredients.$inferSelect;
@@ -308,3 +329,4 @@ export type DbMealPlan = typeof mealPlans.$inferSelect;
 export type DbMealPlanEntry = typeof mealPlanEntries.$inferSelect;
 export type DbNutritionGoal = typeof nutritionGoals.$inferSelect;
 export type DbCookSession = typeof cookSessions.$inferSelect;
+export type DbExtractionJob = typeof extractionJobs.$inferSelect;

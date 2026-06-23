@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 
-const FFMPEG_PATH = ffmpegInstaller.path;
+const FFMPEG_PATH = process.env.FFMPEG_PATH ?? ffmpegInstaller.path;
 ffmpeg.setFfmpegPath(FFMPEG_PATH);
 
 export interface VideoMetadata {

@@ -1,4 +1,6 @@
-import { v4 as uuid } from 'uuid';
+import { eq, sql } from 'drizzle-orm';
+import { db } from '../db/client';
+import { extractionJobs, type DbExtractionJob } from '../db/schema.pg';
 import type { ExtractionResult } from '../routes/extract';
 
 export type JobStatus = 'queued' | 'processing' | 'done' | 'error';
@@ -20,44 +22,69 @@ export interface Job {
   createdAt: number;
 }
 
-const jobs = new Map<string, Job>();
-
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_JOBS ?? '2', 10);
 let activeJobs = 0;
 const waitQueue: Array<() => void> = [];
 
-/** Create a new queued job and register it in the store. */
-export function createJob(url: string, userId: string): Job {
-  const job: Job = {
-    id: uuid(),
-    url,
-    userId,
-    status: 'queued',
-    progress: [],
-    createdAt: Date.now(),
+function rowToJob(row: DbExtractionJob): Job {
+  return {
+    id: row.id,
+    url: row.url,
+    userId: row.userId,
+    status: row.status as JobStatus,
+    progress: row.progress ?? [],
+    result: row.result ?? undefined,
+    error: row.error ?? undefined,
+    createdAt: row.createdAt.getTime(),
   };
-  jobs.set(job.id, job);
-  return job;
 }
 
-export function getJob(id: string): Job | undefined {
-  return jobs.get(id);
+/** Create a new queued job and persist it. */
+export async function createJob(url: string, userId: string): Promise<Job> {
+  const [row] = await db
+    .insert(extractionJobs)
+    .values({ url, userId, status: 'queued', progress: [] })
+    .returning();
+  return rowToJob(row);
 }
 
-export function updateJob(id: string, partial: Partial<Job>): void {
-  const job = jobs.get(id);
-  if (job) Object.assign(job, partial);
+export async function getJob(id: string): Promise<Job | undefined> {
+  const [row] = await db.select().from(extractionJobs).where(eq(extractionJobs.id, id)).limit(1);
+  return row ? rowToJob(row) : undefined;
 }
 
-/** Append a progress event to a job's log. */
-export function addProgress(id: string, stage: string, message: string): void {
-  const job = jobs.get(id);
-  if (job) job.progress.push({ stage, message, ts: Date.now() });
+export async function updateJob(
+  id: string,
+  partial: Partial<Pick<Job, 'status' | 'result' | 'error'>>,
+): Promise<void> {
+  await db
+    .update(extractionJobs)
+    .set({
+      ...(partial.status !== undefined ? { status: partial.status } : {}),
+      ...(partial.result !== undefined ? { result: partial.result } : {}),
+      ...(partial.error !== undefined ? { error: partial.error } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(extractionJobs.id, id));
+}
+
+/** Append a progress event atomically (jsonb concat — safe for the single worker). */
+export async function addProgress(id: string, stage: string, message: string): Promise<void> {
+  const event: JobProgress = { stage, message, ts: Date.now() };
+  await db
+    .update(extractionJobs)
+    .set({
+      progress: sql`${extractionJobs.progress} || ${JSON.stringify([event])}::jsonb`,
+      updatedAt: new Date(),
+    })
+    .where(eq(extractionJobs.id, id));
 }
 
 /**
  * Acquire a concurrency slot. Resolves immediately if a slot is free,
- * otherwise waits until one becomes available.
+ * otherwise waits until one becomes available. Per-instance — caps heavy
+ * yt-dlp/ffmpeg work on a single Cloud Run node; Cloud Tasks rate limits
+ * govern fleet-wide concurrency.
  */
 export function acquireSlot(): Promise<void> {
   if (activeJobs < MAX_CONCURRENT) {
@@ -78,11 +105,3 @@ export function releaseSlot(): void {
     activeJobs--;
   }
 }
-
-// Clean up jobs older than 1 hour to prevent memory leaks.
-setInterval(() => {
-  const cutoff = Date.now() - 60 * 60 * 1000;
-  for (const [id, job] of jobs) {
-    if (job.createdAt < cutoff) jobs.delete(id);
-  }
-}, 5 * 60 * 1000).unref(); // .unref() so this timer doesn't keep the process alive

@@ -14,6 +14,7 @@ import { recommendRouter } from './routes/recommend';
 import { cookRouter } from './routes/cook';
 import { preferencesRouter } from './routes/preferences';
 import { importRecipeRouter } from './routes/importRecipe';
+import { workerRouter } from './routes/worker';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -22,11 +23,9 @@ const PORT = Number(process.env.PORT ?? 3001);
 app.use(cors({ origin: process.env.CORS_ORIGIN ?? '*' }));
 app.use(express.json({ limit: '10mb' }));
 
-// Serve persisted recipe thumbnails (extracted keyframes)
-const thumbnailsDir = path.resolve(
-  process.env.THUMBNAILS_DIR ??
-  path.join(path.dirname(process.env.DB_PATH ?? './data/recipesnap.db'), 'thumbnails')
-);
+// Dev fallback: serve keyframe thumbnails written to local disk. In prod these
+// live in Supabase Storage (absolute URLs), so this mount is unused.
+const thumbnailsDir = path.resolve(process.env.THUMBNAILS_DIR ?? './data/thumbnails');
 app.use('/thumbnails', express.static(thumbnailsDir));
 
 // Health check
@@ -47,6 +46,9 @@ app.use('/api/recommendations', recommendRouter);
 app.use('/api/cook', cookRouter);
 app.use('/api', preferencesRouter);
 app.use('/api', importRecipeRouter);
+
+// Machine-to-machine worker endpoint (invoked by Cloud Tasks, not the app)
+app.use('/worker', workerRouter);
 
 // 404 handler
 app.use((_req, res) => {

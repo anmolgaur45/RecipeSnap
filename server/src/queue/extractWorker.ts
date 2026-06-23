@@ -1,5 +1,3 @@
-import path from 'path';
-import fs from 'fs';
 import { resolveUrl } from '../services/platformResolver';
 import { downloadVideo, cleanupDownload } from '../services/videoDownloader';
 import { fetchCaptions } from '../services/captionFetcher';
@@ -8,31 +6,31 @@ import { runOcrOnVideo } from '../services/ocrService';
 import { structureRecipe, toRecipeRecord } from '../services/recipeStructurer';
 import { calculateNutrition } from '../services/nutritionCalculator';
 import { tagRecipe } from '../services/autoTagger';
+import { persistThumbnail } from '../services/thumbnailStore';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { recipes, ingredients, steps } from '../db/schema.pg';
-import { type Job, updateJob, addProgress, acquireSlot, releaseSlot } from './jobStore';
+import { getJob, updateJob, addProgress, acquireSlot, releaseSlot } from './jobStore';
 import type { ExtractionResult } from '../routes/extract';
 
-const THUMBNAILS_DIR = path.resolve(
-  process.env.THUMBNAILS_DIR ??
-  path.join(path.dirname(process.env.DB_PATH ?? './data/recipesnap.db'), 'thumbnails')
-);
-
 /**
- * Runs the full extraction pipeline for a job in the background.
- * Call without await — it updates job state as it progresses.
+ * Runs the full extraction pipeline for a persisted job. Loads the job by id so
+ * the same entry point serves both the Cloud Tasks worker request and the dev
+ * inline path. Updates job state in Postgres as it progresses.
  */
-export async function runExtractionJob(job: Job): Promise<void> {
+export async function runExtractionJob(jobId: string): Promise<void> {
+  const job = await getJob(jobId);
+  if (!job) return; // job expired or never existed
+
   await acquireSlot();
-  updateJob(job.id, { status: 'processing' });
+  await updateJob(job.id, { status: 'processing' });
 
   let tempDir: string | null = null;
   const startMs = Date.now();
 
   try {
     // Step 1: Resolve URL
-    addProgress(job.id, 'resolving', 'Resolving video URL...');
+    await addProgress(job.id, 'resolving', 'Resolving video URL...');
     const { platform, resolvedUrl } = await withTimeout(
       resolveUrl(job.url),
       15_000,
@@ -44,7 +42,7 @@ export async function runExtractionJob(job: Job): Promise<void> {
     }
 
     // Step 2: Download video + fetch captions in parallel
-    addProgress(job.id, 'downloading', 'Downloading video...');
+    await addProgress(job.id, 'downloading', 'Downloading video...');
     const [downloadSettled, captionEarlySettled] = await Promise.allSettled([
       withTimeout(downloadVideo(resolvedUrl), 90_000, 'Video download timed out'),
       withTimeout(fetchCaptions(resolvedUrl, ''), 20_000, 'Caption fetch timed out'),
@@ -55,7 +53,7 @@ export async function runExtractionJob(job: Job): Promise<void> {
     tempDir = download.tempDir;
 
     // Step 3: Parallel extraction
-    addProgress(job.id, 'extracting_audio', 'Extracting audio and captions...');
+    await addProgress(job.id, 'extracting_audio', 'Extracting audio and captions...');
 
     const [captionResult, transcriptResult, ocrResult] = await Promise.allSettled([
       captionEarlySettled.status === 'fulfilled'
@@ -67,7 +65,7 @@ export async function runExtractionJob(job: Job): Promise<void> {
           ),
       withTimeout(
         (async () => {
-          addProgress(job.id, 'transcribing', 'Transcribing voiceover...');
+          await addProgress(job.id, 'transcribing', 'Transcribing voiceover...');
           return transcribeAudio(download.audioPath);
         })(),
         90_000,
@@ -75,7 +73,7 @@ export async function runExtractionJob(job: Job): Promise<void> {
       ),
       withTimeout(
         (async () => {
-          addProgress(job.id, 'running_ocr', 'Reading on-screen text...');
+          await addProgress(job.id, 'running_ocr', 'Reading on-screen text...');
           return runOcrOnVideo(download.videoPath);
         })(),
         60_000,
@@ -92,7 +90,7 @@ export async function runExtractionJob(job: Job): Promise<void> {
     if (ocrResult.status === 'rejected') console.warn('[worker] OCR failed:', ocrResult.reason);
 
     // Step 4: Structure recipe with AI
-    addProgress(job.id, 'structuring', 'Organising your recipe with AI...');
+    await addProgress(job.id, 'structuring', 'Organising your recipe with AI...');
 
     const structured = await withTimeout(
       structureRecipe({
@@ -103,24 +101,16 @@ export async function runExtractionJob(job: Job): Promise<void> {
         videoTitle: download.metadata.title,
         videoDescription: download.metadata.description,
       }),
-      30_000,
+      60_000,
       'AI structuring timed out'
     );
 
     const baseRecipe = toRecipeRecord(structured, resolvedUrl, platform);
 
     // Persist the keyframe thumbnail so it survives temp-dir cleanup
-    let thumbnailUrl: string | null = null;
-    if (download.thumbnailPath) {
-      try {
-        fs.mkdirSync(THUMBNAILS_DIR, { recursive: true });
-        const destPath = path.join(THUMBNAILS_DIR, `${baseRecipe.id}.jpg`);
-        fs.copyFileSync(download.thumbnailPath, destPath);
-        thumbnailUrl = `/thumbnails/${baseRecipe.id}.jpg`;
-      } catch {
-        // Non-fatal — recipe saved without thumbnail
-      }
-    }
+    const thumbnailUrl = download.thumbnailPath
+      ? await persistThumbnail(download.thumbnailPath, baseRecipe.id)
+      : null;
 
     const recipe = { ...baseRecipe, thumbnailUrl };
     await saveRecipeToDb(recipe, job.userId);
@@ -164,8 +154,8 @@ export async function runExtractionJob(job: Job): Promise<void> {
       },
     };
 
-    updateJob(job.id, { status: 'done', result });
-    addProgress(job.id, 'complete', 'Recipe extracted!');
+    await updateJob(job.id, { status: 'done', result });
+    await addProgress(job.id, 'complete', 'Recipe extracted!');
   } catch (err) {
     const message = (err as Error & { code?: string }).code === 'not_a_recipe'
       ? "This doesn't look like a recipe video. Try sharing a cooking video!"
@@ -173,8 +163,8 @@ export async function runExtractionJob(job: Job): Promise<void> {
       ? err.message
       : 'Extraction failed';
 
-    updateJob(job.id, { status: 'error', error: message });
-    addProgress(job.id, 'error', message);
+    await updateJob(job.id, { status: 'error', error: message });
+    await addProgress(job.id, 'error', message);
   } finally {
     if (tempDir) cleanupDownload(tempDir);
     releaseSlot();
