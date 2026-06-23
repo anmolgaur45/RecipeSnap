@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# repo hygiene gate, runs before every push, fails closed
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+z=0000000000000000000000000000000000000000
+
+paths='(^|/)(CLAUDE\.md|plan\.md|PLAN\.md)$|(^|/)\.claude/|(^|/)tasks/|(^|/)\.env$|(^|/)\.env\..*local$|(^|/)server/data/|\.db($|-shm$|-wal$)'
+attrib='co-authored-by|generated (with|by) (claude|ai)|generated using claude|claude code|🤖|noreply@anthropic\.com'
+banned='comprehensive|robust|seamless'
+
+fail() { echo "pre-push blocked: $1" >&2; exit 1; }
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$z" ] && continue
+  if [ "$remote_sha" = "$z" ]; then
+    commits="$(git rev-list "$local_sha" --not --remotes)"
+  else
+    commits="$(git rev-list "${remote_sha}..${local_sha}")"
+  fi
+  for c in $commits; do
+    files="$(git show --name-only --format= "$c")"
+    if printf '%s\n' "$files" | grep -iqE "$paths"; then
+      fail "commit $c adds a forbidden path:
+$(printf '%s\n' "$files" | grep -iE "$paths")"
+    fi
+    msg="$(git show -s --format=%B "$c")"
+    if printf '%s' "$msg" | grep -iqE "$attrib"; then fail "commit $c message contains ai-attribution"; fi
+    if printf '%s' "$msg" | grep -iqE "$banned"; then fail "commit $c message uses a banned word (comprehensive/robust/seamless)"; fi
+    if printf '%s' "$msg" | grep -qF '—'; then fail "commit $c message contains an em dash"; fi
+    diff="$(git show --format= "$c" -- . ':(exclude).githooks/' ':(exclude).github/' ':(exclude)scripts/')"
+    if printf '%s\n' "$diff" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -iqE "$attrib"; then
+      fail "commit $c diff contains ai-attribution"
+    fi
+  done
+done
+
+"$root/scripts/check-hygiene.sh"
+exit 0

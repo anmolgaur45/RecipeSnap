@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# repo hygiene gate, runs before every commit
+set -euo pipefail
+
+req_name="Anmol Gaur"
+req_email="30744879+anmolgaur45@users.noreply.github.com"
+
+paths='(^|/)(CLAUDE\.md|plan\.md|PLAN\.md)$|(^|/)\.claude/|(^|/)tasks/|(^|/)\.env$|(^|/)\.env\..*local$|(^|/)server/data/|\.db($|-shm$|-wal$)'
+attrib='co-authored-by|generated (with|by) (claude|ai)|generated using claude|claude code|🤖|noreply@anthropic\.com'
+
+fail() { echo "pre-commit blocked: $1" >&2; exit 1; }
+
+name="$(git config user.name || true)"
+email="$(git config user.email || true)"
+[ "$name" = "$req_name" ] || fail "git user.name is '$name', expected '$req_name' (run scripts/setup-git-hooks.sh)"
+[ "$email" = "$req_email" ] || fail "git user.email is '$email', expected '$req_email' (run scripts/setup-git-hooks.sh)"
+
+staged="$(git diff --cached --name-only)"
+if [ -n "$staged" ]; then
+  bad="$(printf '%s\n' "$staged" | grep -iE "$paths" || true)"
+  [ -z "$bad" ] || fail "forbidden path staged:
+$bad"
+fi
+
+added="$(git diff --cached --no-color -- . ':(exclude).githooks/' ':(exclude).github/' ':(exclude)scripts/' | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+if printf '%s\n' "$added" | grep -iqE "$attrib"; then
+  fail "ai-attribution string in staged changes:
+$(printf '%s\n' "$added" | grep -inE "$attrib")"
+fi
+
+exit 0

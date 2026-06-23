@@ -47,3 +47,11 @@ server/data/
 CLAUDE.md
 .claude/
 tasks/
+plan.md
+PLAN.md
+
+# Design handoff bundle (not source)
+*-handoff.zip
+
+# Supabase CLI local state
+supabase/.temp/
