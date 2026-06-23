@@ -35,8 +35,14 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: build image
-        run: gcloud builds submit server --tag "$IMAGE" --project "$PROJECT" --quiet
+      # Build in the runner and push to Artifact Registry. Avoids Cloud Build's
+      # staging bucket, which needs serviceusage.services.use that WIF external
+      # credentials do not carry.
+      - name: build and push image
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker build -t "$IMAGE" server
+          docker push "$IMAGE"
 
       # Worker first so its URL is known when deploying the API. Internal-only:
       # Cloud Run IAM allows just the Cloud Tasks invoker SA to call it.
