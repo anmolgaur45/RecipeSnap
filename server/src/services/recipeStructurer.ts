@@ -1,6 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
+import { anthropicClient, openaiClient } from './aiClients';
 
 // ── Zod schema for validating AI output ──────────────────────────────────────
 
@@ -124,12 +124,14 @@ function buildUserMessage(sources: TextSources): string {
 
 export async function structureRecipe(sources: TextSources): Promise<RecipeOutput> {
   const userMessage = buildUserMessage(sources);
+  let lastError: unknown;
 
   // Try Claude first
   if (process.env.ANTHROPIC_API_KEY) {
     try {
       return await structureWithClaude(userMessage);
     } catch (err) {
+      lastError = err;
       console.warn('Claude structuring failed, trying Gemini fallback:', err);
     }
   }
@@ -139,15 +141,23 @@ export async function structureRecipe(sources: TextSources): Promise<RecipeOutpu
     try {
       return await structureWithGemini(userMessage);
     } catch (err) {
+      lastError = err;
       console.warn('Gemini fallback also failed:', err);
     }
+  }
+
+  // A provider was configured but every attempt failed: surface the real reason
+  // (e.g. a transient 529 overload) instead of masking it as "no providers".
+  if (lastError) {
+    const msg = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new Error(`AI structuring failed: ${msg}`);
   }
 
   throw new Error('No AI providers available. Set ANTHROPIC_API_KEY or GOOGLE_GENERATIVE_AI_KEY.');
 }
 
 async function structureWithClaude(userMessage: string): Promise<RecipeOutput> {
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = anthropicClient();
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
@@ -166,8 +176,7 @@ async function structureWithClaude(userMessage: string): Promise<RecipeOutput> {
 
 async function structureWithGemini(userMessage: string): Promise<RecipeOutput> {
   // Using the OpenAI-compatible Gemini API endpoint
-  const { default: OpenAI } = await import('openai');
-  const client = new OpenAI({
+  const client = openaiClient({
     apiKey: process.env.GOOGLE_GENERATIVE_AI_KEY,
     baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
   });

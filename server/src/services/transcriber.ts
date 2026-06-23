@@ -1,4 +1,5 @@
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
+import { openaiClient } from './aiClients';
 import fs from 'fs';
 
 export interface TranscriptResult {
@@ -37,7 +38,7 @@ async function transcribeWithWhisper(
   audioPath: string,
   fileSize: number
 ): Promise<TranscriptResult> {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = openaiClient({ apiKey: process.env.OPENAI_API_KEY });
 
   if (fileSize > MAX_WHISPER_SIZE_BYTES) {
     // For large files, chunk the audio

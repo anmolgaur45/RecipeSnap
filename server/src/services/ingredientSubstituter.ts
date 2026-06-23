@@ -5,7 +5,7 @@
  * duplicate API calls when the user re-opens the sheet.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { anthropicClient } from './aiClients';
 import { z } from 'zod';
 import type { DbIngredient, DbRecipe, DbStep } from '../db/schema.pg';
 
@@ -145,7 +145,7 @@ Reason for substitution: ${reason}
 
 Suggest 2-3 practical substitutes considering the full recipe context above.`;
 
-  const client = new Anthropic();
+  const client = anthropicClient();
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,

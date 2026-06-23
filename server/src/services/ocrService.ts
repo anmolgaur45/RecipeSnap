@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { anthropicClient } from './aiClients';
 import fs from 'fs';
 import { extractKeyframes, cleanupKeyframes } from '../utils/keyframeExtractor';
 
@@ -23,7 +23,7 @@ export async function runOcrOnVideo(videoPath: string): Promise<OcrResult> {
   }
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = anthropicClient();
     const ocrTexts: string[] = [];
 
     for (const framePath of framePaths) {

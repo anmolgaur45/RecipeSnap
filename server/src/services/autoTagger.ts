@@ -9,7 +9,7 @@
  * Results are cached per recipeId (in-memory) to avoid redundant API calls.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { anthropicClient } from './aiClients';
 import { z } from 'zod';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
@@ -133,7 +133,7 @@ ${stepsContext}`;
   let aiTags: Array<{ tag: string; type: string }> = [];
 
   try {
-    const client = new Anthropic();
+    const client = anthropicClient();
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 512,

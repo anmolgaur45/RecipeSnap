@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { anthropicClient } from './aiClients';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
@@ -6,7 +6,7 @@ import { nutritionCache } from '../db/schema.pg';
 import { WEIGHT_TO_G, VOLUME_TO_TSP, getUnitFamily } from '../utils/unitConversion';
 import { parseIngredient } from '../utils/ingredientParser';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = anthropicClient();
 
 // ── Indian / regional ingredient aliases ─────────────────────────────────────
 

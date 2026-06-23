@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { anthropicClient } from './aiClients';
 import { z } from 'zod';
 import { and, asc, desc, eq, gte, isNotNull } from 'drizzle-orm';
 import { db } from '../db/client';
@@ -11,7 +11,7 @@ import {
 } from '../db/schema.pg';
 import { normalizeItemName, computeExpiryStatus } from './pantryManager';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = anthropicClient();
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

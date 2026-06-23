@@ -6,8 +6,8 @@
  * The route handler is responsible for DB persistence — this module is pure.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
+import { anthropicClient, openaiClient } from './aiClients';
 
 // ── Adaptation types ──────────────────────────────────────────────────────────
 
@@ -178,7 +178,7 @@ function buildUserMessage(recipe: RecipeInput, type: AdaptationType, customPromp
 // ── AI calls ──────────────────────────────────────────────────────────────────
 
 async function adaptWithClaude(userMessage: string): Promise<AdaptationOutput> {
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = anthropicClient();
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
@@ -196,8 +196,7 @@ async function adaptWithClaude(userMessage: string): Promise<AdaptationOutput> {
 }
 
 async function adaptWithGemini(userMessage: string): Promise<AdaptationOutput> {
-  const { default: OpenAI } = await import('openai');
-  const client = new OpenAI({
+  const client = openaiClient({
     apiKey: process.env.GOOGLE_GENERATIVE_AI_KEY,
     baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
   });
