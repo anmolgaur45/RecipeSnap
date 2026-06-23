@@ -1,6 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { db, DbRecipe, DbIngredient, DbPantryItem } from '../db/schema';
+import { and, asc, desc, eq, gte, isNotNull } from 'drizzle-orm';
+import { db } from '../db/client';
+import {
+  recipes as recipesTable,
+  ingredients as ingredientsTable,
+  pantry as pantryTable,
+  cookSessions,
+  type DbPantryItem,
+} from '../db/schema.pg';
 import { normalizeItemName, computeExpiryStatus } from './pantryManager';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -54,7 +62,6 @@ export interface ExpiringAlert {
 
 const SKIP_INGREDIENTS = new Set(['water', 'ice', 'salt', 'pepper', 'oil', 'water water']);
 
-/** Fuzzy match: ingredient name vs pantry item name (both already normalized) */
 function fuzzyMatch(ingNorm: string, pantryNorm: string): boolean {
   if (ingNorm === pantryNorm) return true;
   if (ingNorm.length >= 3 && pantryNorm.includes(ingNorm)) return true;
@@ -64,53 +71,49 @@ function fuzzyMatch(ingNorm: string, pantryNorm: string): boolean {
 
 // ── Pantry Matching ───────────────────────────────────────────────────────────
 
-export function getPantryMatches(options: {
-  limit?: number;
-  minMatch?: number;
-  prioritizeExpiring?: boolean;
-} = {}): RecipeRecommendation[] {
+export async function getPantryMatches(
+  userId: string,
+  options: { limit?: number; minMatch?: number; prioritizeExpiring?: boolean } = {},
+): Promise<RecipeRecommendation[]> {
   const { limit = 20, minMatch = 0, prioritizeExpiring = true } = options;
 
-  const recipes = db.prepare(`SELECT * FROM recipes ORDER BY createdAt DESC`).all() as DbRecipe[];
-  if (recipes.length === 0) return [];
+  const recipeRows = await db
+    .select()
+    .from(recipesTable)
+    .where(eq(recipesTable.userId, userId))
+    .orderBy(desc(recipesTable.createdAt));
+  if (recipeRows.length === 0) return [];
 
-  const pantryItems = db.prepare(`SELECT * FROM pantry`).all() as DbPantryItem[];
+  const pantryItems = await db.select().from(pantryTable).where(eq(pantryTable.userId, userId));
   if (pantryItems.length === 0) return [];
 
-  // Recently cooked recipes (last 7 days) get -10 score penalty
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const recentCooks = db
-    .prepare(`SELECT recipeId FROM cook_sessions WHERE completedAt IS NOT NULL AND completedAt >= ?`)
-    .all(sevenDaysAgo) as Array<{ recipeId: string }>;
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentCooks = await db
+    .select({ recipeId: cookSessions.recipeId })
+    .from(cookSessions)
+    .where(and(eq(cookSessions.userId, userId), isNotNull(cookSessions.completedAt), gte(cookSessions.completedAt, sevenDaysAgo)));
   const recentCookSet = new Set(recentCooks.map((r) => r.recipeId));
 
-  // Build pantry lookup map: normalizedName → pantry item
   const pantryMap = new Map<string, DbPantryItem>();
-  for (const p of pantryItems) {
-    pantryMap.set(normalizeItemName(p.item), p);
-  }
+  for (const p of pantryItems) pantryMap.set(normalizeItemName(p.item), p);
 
-  // Expiring pantry item IDs
   const expiringItemIds = new Set<number>();
   for (const p of pantryItems) {
     const status = computeExpiryStatus(p.expiresAt);
-    if (status === 'expiring_soon' || status === 'expired') {
-      expiringItemIds.add(p.id);
-    }
+    if (status === 'expiring_soon' || status === 'expired') expiringItemIds.add(p.id);
   }
 
   const results: RecipeRecommendation[] = [];
 
-  for (const recipe of recipes) {
-    const ingredients = db
-      .prepare(`SELECT * FROM ingredients WHERE recipeId = ? ORDER BY sortOrder`)
-      .all(recipe.id) as DbIngredient[];
+  for (const recipe of recipeRows) {
+    const ingredients = await db
+      .select()
+      .from(ingredientsTable)
+      .where(eq(ingredientsTable.recipeId, recipe.id))
+      .orderBy(asc(ingredientsTable.sortOrder));
     if (ingredients.length === 0) continue;
 
-    // Exclude staple-like ingredients from denominator
-    const countable = ingredients.filter(
-      (ing) => !SKIP_INGREDIENTS.has(normalizeItemName(ing.item))
-    );
+    const countable = ingredients.filter((ing) => !SKIP_INGREDIENTS.has(normalizeItemName(ing.item)));
     if (countable.length === 0) continue;
 
     const matchedIngredients: IngredientMatch[] = [];
@@ -131,15 +134,11 @@ export function getPantryMatches(options: {
         }
       }
 
-      const isExpiring = matched && matchedPantryItem != null
-        ? expiringItemIds.has(matchedPantryItem.id)
-        : false;
+      const isExpiring = matched && matchedPantryItem != null ? expiringItemIds.has(matchedPantryItem.id) : false;
 
       if (matched) {
         matchedCount++;
-        if (isExpiring && matchedPantryItem) {
-          usedExpiringNames.push(matchedPantryItem.displayName ?? matchedPantryItem.item);
-        }
+        if (isExpiring && matchedPantryItem) usedExpiringNames.push(matchedPantryItem.displayName ?? matchedPantryItem.item);
       } else {
         missingIngredients.push(ing.item);
       }
@@ -161,9 +160,7 @@ export function getPantryMatches(options: {
     if (recentCookSet.has(recipe.id)) score -= 10;
 
     const category: MatchCategory =
-      matchPercentage === 100 ? 'ready'
-      : matchPercentage >= 70 ? 'almost'
-      : 'needs_shopping';
+      matchPercentage === 100 ? 'ready' : matchPercentage >= 70 ? 'almost' : 'needs_shopping';
 
     results.push({
       recipeId: recipe.id,
@@ -182,11 +179,7 @@ export function getPantryMatches(options: {
   }
 
   results.sort((a, b) => {
-    if (prioritizeExpiring) {
-      if (a.usesExpiringItems !== b.usesExpiringItems) {
-        return a.usesExpiringItems ? -1 : 1;
-      }
-    }
+    if (prioritizeExpiring && a.usesExpiringItems !== b.usesExpiringItems) return a.usesExpiringItems ? -1 : 1;
     return b.score - a.score;
   });
 
@@ -206,16 +199,17 @@ const AISuggestionsSchema = z.object({
         difficulty: z.enum(['easy', 'medium', 'hard']),
         ingredients: z.array(z.object({ item: z.string(), quantity: z.string() })),
         steps: z.array(z.string()),
-      })
+      }),
     )
     .min(1)
     .max(3),
 });
 
-export async function getAISuggestions(options: {
-  prioritizeExpiring?: boolean;
-} = {}): Promise<AISuggestedRecipe[]> {
-  const pantryItems = db.prepare(`SELECT * FROM pantry`).all() as DbPantryItem[];
+export async function getAISuggestions(
+  userId: string,
+  options: { prioritizeExpiring?: boolean } = {},
+): Promise<AISuggestedRecipe[]> {
+  const pantryItems = await db.select().from(pantryTable).where(eq(pantryTable.userId, userId));
   if (pantryItems.length === 0) return [];
 
   const expiringItems = pantryItems.filter((p) => {
@@ -224,14 +218,10 @@ export async function getAISuggestions(options: {
   });
 
   const pantryList = [
-    ...(options.prioritizeExpiring
-      ? expiringItems.map((p) => `${p.displayName ?? p.item} (use soon!)`)
-      : []),
+    ...(options.prioritizeExpiring ? expiringItems.map((p) => `${p.displayName ?? p.item} (use soon!)`) : []),
     ...pantryItems
       .filter((p) => computeExpiryStatus(p.expiresAt) === 'fresh')
-      .map((p) =>
-        `${p.displayName ?? p.item}${p.quantity ? ` (${p.quantity}${p.unit ? ' ' + p.unit : ''})` : ''}`
-      ),
+      .map((p) => `${p.displayName ?? p.item}${p.quantity ? ` (${p.quantity}${p.unit ? ' ' + p.unit : ''})` : ''}`),
   ].join(', ');
 
   const prompt = `You are a helpful recipe assistant. Given these pantry items, suggest 3 creative and practical recipes that make good use of what's available.
@@ -264,40 +254,27 @@ Respond with ONLY valid JSON, no other text:
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('No JSON found in AI response');
 
-  const parsed = AISuggestionsSchema.parse(JSON.parse(jsonMatch[0]));
-  return parsed.recipes;
+  return AISuggestionsSchema.parse(JSON.parse(jsonMatch[0])).recipes;
 }
 
 // ── Expiring Alerts ────────────────────────────────────────────────────────────
 
-export function getExpiringAlerts(): ExpiringAlert[] {
-  const pantryItems = db.prepare(`SELECT * FROM pantry`).all() as DbPantryItem[];
+export async function getExpiringAlerts(userId: string): Promise<ExpiringAlert[]> {
+  const pantryItems = await db.select().from(pantryTable).where(eq(pantryTable.userId, userId));
   const expiring = pantryItems.filter((p) => {
     const s = computeExpiryStatus(p.expiresAt);
     return s === 'expiring_soon' || s === 'expired';
   });
-
   if (expiring.length === 0) return [];
 
-  // Run pantry matching once to get all recommendations
-  const allRecs = getPantryMatches({ limit: 200, minMatch: 0, prioritizeExpiring: false });
-
+  const allRecs = await getPantryMatches(userId, { limit: 200, minMatch: 0, prioritizeExpiring: false });
   const alerts: ExpiringAlert[] = [];
 
   for (const pantryItem of expiring) {
     const status = computeExpiryStatus(pantryItem.expiresAt);
-
     const matchedRecipes = allRecs
-      .filter((rec) =>
-        rec.matchedIngredients.some(
-          (mi) => mi.matched && mi.pantryItemId === pantryItem.id
-        )
-      )
-      .map((rec) => ({
-        recipeId: rec.recipeId,
-        recipeTitle: rec.recipeTitle,
-        matchPercentage: rec.matchPercentage,
-      }))
+      .filter((rec) => rec.matchedIngredients.some((mi) => mi.matched && mi.pantryItemId === pantryItem.id))
+      .map((rec) => ({ recipeId: rec.recipeId, recipeTitle: rec.recipeTitle, matchPercentage: rec.matchPercentage }))
       .sort((a, b) => b.matchPercentage - a.matchPercentage)
       .slice(0, 3);
 

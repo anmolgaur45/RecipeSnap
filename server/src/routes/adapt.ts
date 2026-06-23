@@ -1,12 +1,13 @@
-import { Router, Request, Response } from 'express';
+import { Router, type Request, type Response } from 'express';
+import { requireAuth } from '../middleware/auth';
 
 export const adaptRouter = Router();
 
 /**
  * POST /api/adapt — standalone adapt endpoint (not yet used by clients).
- * Adaptation is fully implemented and accessible via POST /api/recipes/:id/adapt.
+ * Adaptation is implemented and accessible via POST /api/recipes/:id/adapt.
  * This route exists as a future convenience alias.
  */
-adaptRouter.post('/', (_req: Request, res: Response) => {
+adaptRouter.post('/', requireAuth, (_req: Request, res: Response) => {
   res.status(501).json({ error: 'Use POST /api/recipes/:id/adapt instead' });
 });

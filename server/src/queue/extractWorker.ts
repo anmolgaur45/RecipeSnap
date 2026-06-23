@@ -1,4 +1,5 @@
-import { v4 as uuid } from 'uuid';
+import path from 'path';
+import fs from 'fs';
 import { resolveUrl } from '../services/platformResolver';
 import { downloadVideo, cleanupDownload } from '../services/videoDownloader';
 import { fetchCaptions } from '../services/captionFetcher';
@@ -7,9 +8,16 @@ import { runOcrOnVideo } from '../services/ocrService';
 import { structureRecipe, toRecipeRecord } from '../services/recipeStructurer';
 import { calculateNutrition } from '../services/nutritionCalculator';
 import { tagRecipe } from '../services/autoTagger';
-import { db } from '../db/schema';
+import { eq } from 'drizzle-orm';
+import { db } from '../db/client';
+import { recipes, ingredients, steps } from '../db/schema.pg';
 import { type Job, updateJob, addProgress, acquireSlot, releaseSlot } from './jobStore';
 import type { ExtractionResult } from '../routes/extract';
+
+const THUMBNAILS_DIR = path.resolve(
+  process.env.THUMBNAILS_DIR ??
+  path.join(path.dirname(process.env.DB_PATH ?? './data/recipesnap.db'), 'thumbnails')
+);
 
 /**
  * Runs the full extraction pipeline for a job in the background.
@@ -99,22 +107,41 @@ export async function runExtractionJob(job: Job): Promise<void> {
       'AI structuring timed out'
     );
 
-    const recipe = toRecipeRecord(structured, resolvedUrl, platform);
-    saveRecipeToDb(recipe);
+    const baseRecipe = toRecipeRecord(structured, resolvedUrl, platform);
+
+    // Persist the keyframe thumbnail so it survives temp-dir cleanup
+    let thumbnailUrl: string | null = null;
+    if (download.thumbnailPath) {
+      try {
+        fs.mkdirSync(THUMBNAILS_DIR, { recursive: true });
+        const destPath = path.join(THUMBNAILS_DIR, `${baseRecipe.id}.jpg`);
+        fs.copyFileSync(download.thumbnailPath, destPath);
+        thumbnailUrl = `/thumbnails/${baseRecipe.id}.jpg`;
+      } catch {
+        // Non-fatal — recipe saved without thumbnail
+      }
+    }
+
+    const recipe = { ...baseRecipe, thumbnailUrl };
+    await saveRecipeToDb(recipe, job.userId);
 
     // Fire-and-forget nutrition calculation — doesn't block job completion
     void calculateNutrition({ title: recipe.title, servings: recipe.servings, ingredients: recipe.ingredients })
-      .then((nutrition) => {
-        db.prepare(`
-          UPDATE recipes
-          SET caloriesPerServing = ?, proteinGrams = ?, carbsGrams = ?, fatGrams = ?,
-              fiberGrams = ?, sugarGrams = ?, sodiumMg = ?, nutritionConfidence = ?
-          WHERE id = ?
-        `).run(
-          nutrition.caloriesPerServing, nutrition.proteinGrams, nutrition.carbsGrams,
-          nutrition.fatGrams, nutrition.fiberGrams, nutrition.sugarGrams, nutrition.sodiumMg,
-          nutrition.confidence, recipe.id,
-        );
+      .then(async (nutrition) => {
+        await db
+          .update(recipes)
+          .set({
+            caloriesPerServing: nutrition.caloriesPerServing,
+            proteinGrams: nutrition.proteinGrams,
+            carbsGrams: nutrition.carbsGrams,
+            fatGrams: nutrition.fatGrams,
+            fiberGrams: nutrition.fiberGrams,
+            sugarGrams: nutrition.sugarGrams,
+            sodiumMg: nutrition.sodiumMg,
+            nutritionConfidence: nutrition.confidence,
+            updatedAt: new Date(),
+          })
+          .where(eq(recipes.id, recipe.id));
       })
       .catch((e: unknown) => {
         console.warn('[worker] Nutrition calculation failed (non-fatal):', e);
@@ -161,37 +188,53 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-function saveRecipeToDb(recipe: ReturnType<typeof toRecipeRecord>): void {
-  const insertRecipe = db.prepare(`
-    INSERT OR REPLACE INTO recipes
-      (id, title, description, servings, prepTime, cookTime, difficulty, cuisine,
-       tags, notes, sourceUrl, platform, confidence, createdAt, updatedAt)
-    VALUES
-      (@id, @title, @description, @servings, @prepTime, @cookTime, @difficulty, @cuisine,
-       @tags, @notes, @sourceUrl, @platform, @confidence, @createdAt, @updatedAt)
-  `);
+async function saveRecipeToDb(
+  recipe: ReturnType<typeof toRecipeRecord> & { thumbnailUrl?: string | null },
+  userId: string,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.insert(recipes).values({
+      id: recipe.id,
+      userId,
+      title: recipe.title,
+      description: recipe.description,
+      servings: recipe.servings,
+      prepTime: recipe.prepTime,
+      cookTime: recipe.cookTime,
+      difficulty: recipe.difficulty,
+      cuisine: recipe.cuisine,
+      tags: JSON.stringify(recipe.tags),
+      notes: recipe.notes,
+      sourceUrl: recipe.sourceUrl,
+      platform: recipe.platform,
+      confidence: recipe.confidence,
+      thumbnailUrl: recipe.thumbnailUrl ?? null,
+    });
 
-  const insertIngredient = db.prepare(`
-    INSERT INTO ingredients
-      (id, recipeId, item, quantity, category, isOptional, sortOrder)
-    VALUES (@id, @recipeId, @item, @quantity, @category, @isOptional, @sortOrder)
-  `);
-
-  const insertStep = db.prepare(`
-    INSERT INTO steps
-      (id, recipeId, stepNumber, instruction, duration, tip)
-    VALUES (@id, @recipeId, @stepNumber, @instruction, @duration, @tip)
-  `);
-
-  const transaction = db.transaction(() => {
-    insertRecipe.run({ ...recipe, tags: JSON.stringify(recipe.tags) });
-    for (const ing of recipe.ingredients) {
-      insertIngredient.run({ ...ing, recipeId: recipe.id, isOptional: ing.isOptional ? 1 : 0 });
+    if (recipe.ingredients.length > 0) {
+      await tx.insert(ingredients).values(
+        recipe.ingredients.map((ing) => ({
+          id: ing.id,
+          recipeId: recipe.id,
+          item: ing.item,
+          quantity: ing.quantity,
+          category: ing.category,
+          isOptional: ing.isOptional,
+          sortOrder: ing.sortOrder,
+        })),
+      );
     }
-    for (const step of recipe.steps) {
-      insertStep.run({ id: uuid(), recipeId: recipe.id, ...step });
+
+    if (recipe.steps.length > 0) {
+      await tx.insert(steps).values(
+        recipe.steps.map((s) => ({
+          recipeId: recipe.id,
+          stepNumber: s.stepNumber,
+          instruction: s.instruction,
+          duration: s.duration,
+          tip: s.tip,
+        })),
+      );
     }
   });
-
-  transaction();
 }

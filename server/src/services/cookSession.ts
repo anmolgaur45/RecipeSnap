@@ -1,47 +1,50 @@
-import { db } from '../db/schema';
-import type { DbCookSession } from '../db/schema';
+import { and, desc, eq } from 'drizzle-orm';
+import { db } from '../db/client';
+import { cookSessions, recipes, type DbCookSession } from '../db/schema.pg';
 
-export function startSession(
+/** Start a cook session for one of the user's recipes. Returns null if not owned. */
+export async function startSession(
+  userId: string,
   recipeId: string,
   servingsCooked: number,
   mealPlanEntryId?: number,
-): DbCookSession {
-  const result = db
-    .prepare(
-      `INSERT INTO cook_sessions (recipeId, servingsCooked, mealPlanEntryId)
-       VALUES (?, ?, ?)`,
-    )
-    .run(recipeId, servingsCooked, mealPlanEntryId ?? null);
+): Promise<DbCookSession | null> {
+  const recipe = (
+    await db.select({ id: recipes.id }).from(recipes).where(and(eq(recipes.id, recipeId), eq(recipes.userId, userId))).limit(1)
+  )[0];
+  if (!recipe) return null;
 
-  return db
-    .prepare('SELECT * FROM cook_sessions WHERE id = ?')
-    .get(result.lastInsertRowid) as DbCookSession;
+  const [session] = await db
+    .insert(cookSessions)
+    .values({ userId, recipeId, servingsCooked, mealPlanEntryId: mealPlanEntryId ?? null })
+    .returning();
+  return session;
 }
 
-export function completeSession(
+export async function completeSession(
+  userId: string,
   id: number,
   rating: number,
   notes?: string,
-): DbCookSession {
-  db.prepare(
-    `UPDATE cook_sessions
-     SET completedAt = datetime('now'), rating = ?, notes = ?
-     WHERE id = ?`,
-  ).run(rating, notes ?? null, id);
-
-  return db
-    .prepare('SELECT * FROM cook_sessions WHERE id = ?')
-    .get(id) as DbCookSession;
+): Promise<DbCookSession | null> {
+  const [session] = await db
+    .update(cookSessions)
+    .set({ completedAt: new Date(), rating, notes: notes ?? null })
+    .where(and(eq(cookSessions.id, id), eq(cookSessions.userId, userId)))
+    .returning();
+  return session ?? null;
 }
 
-export function getSession(id: number): DbCookSession | undefined {
-  return db
-    .prepare('SELECT * FROM cook_sessions WHERE id = ?')
-    .get(id) as DbCookSession | undefined;
+export async function getSession(userId: string, id: number): Promise<DbCookSession | undefined> {
+  return (
+    await db.select().from(cookSessions).where(and(eq(cookSessions.id, id), eq(cookSessions.userId, userId))).limit(1)
+  )[0];
 }
 
-export function getSessionsForRecipe(recipeId: string): DbCookSession[] {
+export async function getSessionsForRecipe(userId: string, recipeId: string): Promise<DbCookSession[]> {
   return db
-    .prepare('SELECT * FROM cook_sessions WHERE recipeId = ? ORDER BY startedAt DESC')
-    .all(recipeId) as DbCookSession[];
+    .select()
+    .from(cookSessions)
+    .where(and(eq(cookSessions.userId, userId), eq(cookSessions.recipeId, recipeId)))
+    .orderBy(desc(cookSessions.startedAt));
 }

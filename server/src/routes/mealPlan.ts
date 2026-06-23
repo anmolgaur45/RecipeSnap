@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import {
   createPlan,
   getActivePlan,
@@ -15,47 +15,33 @@ import {
   suggestGoalsAI,
   type MealSlot,
 } from '../services/mealPlanManager';
+import { requireAuth } from '../middleware/auth';
 
 export const mealPlanRouter = Router();
 
+mealPlanRouter.use(requireAuth);
+
 // ── Goals (must be before /:id routes) ───────────────────────────────────────
 
-/** GET /goals — get active nutrition goals */
-mealPlanRouter.get('/goals', (_req: Request, res: Response) => {
+mealPlanRouter.get('/goals', async (req: Request, res: Response) => {
   try {
-    res.json(getGoals());
+    res.json(await getGoals(req.userId!));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
 });
 
-/** PATCH /goals — update nutrition goals */
-mealPlanRouter.patch('/goals', (req: Request, res: Response) => {
-  const updates = req.body as {
-    caloriesTarget?: number;
-    proteinTarget?: number;
-    carbsTarget?: number;
-    fatTarget?: number;
-    fiberTarget?: number;
-  };
+mealPlanRouter.patch('/goals', async (req: Request, res: Response) => {
   try {
-    res.json(updateGoals(updates));
+    res.json(await updateGoals(req.userId!, req.body));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
 });
 
-/** POST /goals/suggest — AI-suggest nutrition goals */
 mealPlanRouter.post('/goals/suggest', async (req: Request, res: Response) => {
-  const profile = req.body as {
-    age?: number;
-    weightKg?: number;
-    activityLevel?: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
-    goal?: 'lose' | 'maintain' | 'gain';
-  };
   try {
-    const result = await suggestGoalsAI(profile);
-    res.json(result);
+    res.json(await suggestGoalsAI(req.body));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
@@ -63,10 +49,9 @@ mealPlanRouter.post('/goals/suggest', async (req: Request, res: Response) => {
 
 // ── Active plan ───────────────────────────────────────────────────────────────
 
-/** GET /active — get the currently active meal plan */
-mealPlanRouter.get('/active', (_req: Request, res: Response) => {
+mealPlanRouter.get('/active', async (req: Request, res: Response) => {
   try {
-    const plan = getActivePlan();
+    const plan = await getActivePlan(req.userId!);
     if (!plan) {
       res.status(404).json({ error: 'No active meal plan' });
       return;
@@ -79,17 +64,10 @@ mealPlanRouter.get('/active', (_req: Request, res: Response) => {
 
 // ── Entry routes (before /:id) ────────────────────────────────────────────────
 
-/** PATCH /entries/:entryId — update a meal entry */
-mealPlanRouter.patch('/entries/:entryId', (req: Request, res: Response) => {
+mealPlanRouter.patch('/entries/:entryId', async (req: Request, res: Response) => {
   const entryId = parseInt(req.params.entryId, 10);
-  const updates = req.body as {
-    date?: string;
-    mealSlot?: MealSlot;
-    servings?: number;
-    notes?: string;
-  };
   try {
-    res.json(updateEntry(entryId, updates));
+    res.json(await updateEntry(req.userId!, entryId, req.body));
   } catch (e) {
     const msg = (e as Error).message;
     if (msg.includes('not found')) res.status(404).json({ error: msg });
@@ -97,22 +75,20 @@ mealPlanRouter.patch('/entries/:entryId', (req: Request, res: Response) => {
   }
 });
 
-/** DELETE /entries/:entryId — remove a meal entry */
-mealPlanRouter.delete('/entries/:entryId', (req: Request, res: Response) => {
+mealPlanRouter.delete('/entries/:entryId', async (req: Request, res: Response) => {
   const entryId = parseInt(req.params.entryId, 10);
   try {
-    removeEntry(entryId);
+    await removeEntry(req.userId!, entryId);
     res.status(204).send();
   } catch (e) {
     res.status(404).json({ error: (e as Error).message });
   }
 });
 
-/** PATCH /entries/:entryId/cooked — mark entry as cooked */
-mealPlanRouter.patch('/entries/:entryId/cooked', (req: Request, res: Response) => {
+mealPlanRouter.patch('/entries/:entryId/cooked', async (req: Request, res: Response) => {
   const entryId = parseInt(req.params.entryId, 10);
   try {
-    res.json(markCooked(entryId));
+    res.json(await markCooked(req.userId!, entryId));
   } catch (e) {
     res.status(404).json({ error: (e as Error).message });
   }
@@ -120,28 +96,20 @@ mealPlanRouter.patch('/entries/:entryId/cooked', (req: Request, res: Response) =
 
 // ── Plan CRUD ─────────────────────────────────────────────────────────────────
 
-/** POST / — create a new meal plan */
-mealPlanRouter.post('/', (req: Request, res: Response) => {
-  const { startDate, endDate, name } = req.body as {
-    startDate?: string;
-    endDate?: string;
-    name?: string;
-  };
-
+mealPlanRouter.post('/', async (req: Request, res: Response) => {
+  const { startDate, endDate, name } = req.body as { startDate?: string; endDate?: string; name?: string };
   if (!startDate || !endDate) {
     res.status(400).json({ error: 'startDate and endDate are required' });
     return;
   }
-
   try {
-    res.status(201).json(createPlan(startDate, endDate, name));
+    res.status(201).json(await createPlan(req.userId!, startDate, endDate, name));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
 });
 
-/** POST /:id/entries — add a recipe to a meal slot */
-mealPlanRouter.post('/:id/entries', (req: Request, res: Response) => {
+mealPlanRouter.post('/:id/entries', async (req: Request, res: Response) => {
   const planId = parseInt(req.params.id, 10);
   const { recipeId, date, mealSlot, servings = 2 } = req.body as {
     recipeId?: string;
@@ -149,14 +117,12 @@ mealPlanRouter.post('/:id/entries', (req: Request, res: Response) => {
     mealSlot?: string;
     servings?: number;
   };
-
   if (!recipeId || !date || !mealSlot) {
     res.status(400).json({ error: 'recipeId, date, and mealSlot are required' });
     return;
   }
-
   try {
-    res.status(201).json(addEntry(planId, recipeId, date, mealSlot as MealSlot, servings));
+    res.status(201).json(await addEntry(req.userId!, planId, recipeId, date, mealSlot as MealSlot, servings));
   } catch (e) {
     const msg = (e as Error).message;
     if (msg.includes('not found')) res.status(404).json({ error: msg });
@@ -165,31 +131,24 @@ mealPlanRouter.post('/:id/entries', (req: Request, res: Response) => {
   }
 });
 
-/** POST /:id/duplicate-day — duplicate all entries from one day to another */
-mealPlanRouter.post('/:id/duplicate-day', (req: Request, res: Response) => {
+mealPlanRouter.post('/:id/duplicate-day', async (req: Request, res: Response) => {
   const planId = parseInt(req.params.id, 10);
-  const { sourceDate, targetDate } = req.body as {
-    sourceDate?: string;
-    targetDate?: string;
-  };
-
+  const { sourceDate, targetDate } = req.body as { sourceDate?: string; targetDate?: string };
   if (!sourceDate || !targetDate) {
     res.status(400).json({ error: 'sourceDate and targetDate are required' });
     return;
   }
-
   try {
-    res.status(201).json(duplicateDay(planId, sourceDate, targetDate));
+    res.status(201).json(await duplicateDay(req.userId!, planId, sourceDate, targetDate));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
 });
 
-/** POST /:id/grocery-list — generate grocery list from plan */
-mealPlanRouter.post('/:id/grocery-list', (req: Request, res: Response) => {
+mealPlanRouter.post('/:id/grocery-list', async (req: Request, res: Response) => {
   const planId = parseInt(req.params.id, 10);
   try {
-    res.status(201).json(generateGroceryListFromPlan(planId));
+    res.status(201).json(await generateGroceryListFromPlan(req.userId!, planId));
   } catch (e) {
     const msg = (e as Error).message;
     if (msg.includes('not found')) res.status(404).json({ error: msg });
@@ -198,22 +157,19 @@ mealPlanRouter.post('/:id/grocery-list', (req: Request, res: Response) => {
   }
 });
 
-/** GET /:id/nutrition/:date — get nutrition for a specific day */
-mealPlanRouter.get('/:id/nutrition/:date', (req: Request, res: Response) => {
+mealPlanRouter.get('/:id/nutrition/:date', async (req: Request, res: Response) => {
   const planId = parseInt(req.params.id, 10);
-  const { date } = req.params;
   try {
-    res.json(getDayNutrition(planId, date));
+    res.json(await getDayNutrition(req.userId!, planId, req.params.date));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
 });
 
-/** GET /:id/nutrition — get week nutrition for all 7 days */
-mealPlanRouter.get('/:id/nutrition', (req: Request, res: Response) => {
+mealPlanRouter.get('/:id/nutrition', async (req: Request, res: Response) => {
   const planId = parseInt(req.params.id, 10);
   try {
-    res.json(getWeekNutrition(planId));
+    res.json(await getWeekNutrition(req.userId!, planId));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }

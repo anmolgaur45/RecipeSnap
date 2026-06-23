@@ -1,6 +1,18 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { db, DbMealPlan, DbMealPlanEntry, DbNutritionGoal } from '../db/schema';
+import { and, asc, count, desc, eq } from 'drizzle-orm';
+import { db } from '../db/client';
+import {
+  mealPlans,
+  mealPlanEntries,
+  nutritionGoals,
+  recipes,
+  groceryLists,
+  groceryListItems,
+  type DbMealPlan,
+  type DbMealPlanEntry,
+  type DbNutritionGoal,
+} from '../db/schema.pg';
 import { depletFromRecipe } from './pantryManager';
 import { buildListFromRecipes } from './groceryListBuilder';
 
@@ -11,60 +23,44 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 export type MealSlot = 'breakfast' | 'morning_snack' | 'lunch' | 'evening_snack' | 'dinner';
 const VALID_SLOTS: MealSlot[] = ['breakfast', 'morning_snack', 'lunch', 'evening_snack', 'dinner'];
 
-export interface HydratedEntry extends Omit<DbMealPlanEntry, 'isCooked'> {
-  isCooked: boolean;
+export interface HydratedEntry extends DbMealPlanEntry {
   recipeTitle: string | null;
   recipeCuisine: string | null;
   recipeTime: string | null;
-  nutrition: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-    fiber: number;
-  } | null;
+  nutrition: { calories: number; protein: number; carbs: number; fat: number; fiber: number } | null;
 }
 
-export interface HydratedPlan extends Omit<DbMealPlan, 'isActive'> {
-  isActive: boolean;
+export interface HydratedPlan extends DbMealPlan {
   entries: HydratedEntry[];
 }
 
 export interface DayNutritionResult {
   date: string;
   totals: { calories: number; protein: number; carbs: number; fat: number; fiber: number };
-  goals: {
-    id: number;
-    caloriesTarget: number;
-    proteinTarget: number;
-    carbsTarget: number;
-    fatTarget: number;
-    fiberTarget: number;
-    isActive: boolean;
-  };
+  goals: DbNutritionGoal;
   percentages: { calories: number; protein: number; carbs: number; fat: number; fiber: number };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-type RecipeNutritionRow = {
-  title: string;
-  cuisine: string | null;
-  cookTime: string | null;
-  prepTime: string | null;
-  caloriesPerServing: number | null;
-  proteinGrams: number | null;
-  carbsGrams: number | null;
-  fatGrams: number | null;
-  fiberGrams: number | null;
-};
-
-function hydrateEntry(entry: DbMealPlanEntry): HydratedEntry {
-  const recipe = db
-    .prepare(
-      'SELECT title, cuisine, cookTime, prepTime, caloriesPerServing, proteinGrams, carbsGrams, fatGrams, fiberGrams FROM recipes WHERE id = ?'
-    )
-    .get(entry.recipeId) as RecipeNutritionRow | undefined;
+async function hydrateEntry(entry: DbMealPlanEntry): Promise<HydratedEntry> {
+  const recipe = (
+    await db
+      .select({
+        title: recipes.title,
+        cuisine: recipes.cuisine,
+        cookTime: recipes.cookTime,
+        prepTime: recipes.prepTime,
+        caloriesPerServing: recipes.caloriesPerServing,
+        proteinGrams: recipes.proteinGrams,
+        carbsGrams: recipes.carbsGrams,
+        fatGrams: recipes.fatGrams,
+        fiberGrams: recipes.fiberGrams,
+      })
+      .from(recipes)
+      .where(eq(recipes.id, entry.recipeId))
+      .limit(1)
+  )[0];
 
   const nutrition =
     recipe?.caloriesPerServing != null
@@ -79,7 +75,6 @@ function hydrateEntry(entry: DbMealPlanEntry): HydratedEntry {
 
   return {
     ...entry,
-    isCooked: entry.isCooked === 1,
     recipeTitle: recipe?.title ?? null,
     recipeCuisine: recipe?.cuisine ?? null,
     recipeTime: recipe?.cookTime ?? recipe?.prepTime ?? null,
@@ -87,210 +82,231 @@ function hydrateEntry(entry: DbMealPlanEntry): HydratedEntry {
   };
 }
 
-function serializeGoal(goal: DbNutritionGoal) {
-  return { ...goal, isActive: goal.isActive === 1 };
+async function ownedPlan(planId: number, userId: string): Promise<DbMealPlan | null> {
+  const rows = await db
+    .select()
+    .from(mealPlans)
+    .where(and(eq(mealPlans.id, planId), eq(mealPlans.userId, userId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+async function ownedEntry(entryId: number, userId: string): Promise<DbMealPlanEntry | null> {
+  const rows = await db
+    .select({ entry: mealPlanEntries })
+    .from(mealPlanEntries)
+    .innerJoin(mealPlans, eq(mealPlanEntries.mealPlanId, mealPlans.id))
+    .where(and(eq(mealPlanEntries.id, entryId), eq(mealPlans.userId, userId)))
+    .limit(1);
+  return rows[0]?.entry ?? null;
+}
+
+/** Return the user's active nutrition goal, creating a default one if none exists. */
+async function getOrCreateActiveGoal(userId: string): Promise<DbNutritionGoal> {
+  const existing = (
+    await db
+      .select()
+      .from(nutritionGoals)
+      .where(and(eq(nutritionGoals.userId, userId), eq(nutritionGoals.isActive, true)))
+      .limit(1)
+  )[0];
+  if (existing) return existing;
+  const [created] = await db.insert(nutritionGoals).values({ userId }).returning();
+  return created;
 }
 
 // ── Plan CRUD ─────────────────────────────────────────────────────────────────
 
-export function createPlan(startDate: string, endDate: string, name?: string): HydratedPlan {
-  db.prepare(
-    "UPDATE meal_plans SET isActive = 0, updatedAt = datetime('now') WHERE isActive = 1"
-  ).run();
+export async function createPlan(
+  userId: string,
+  startDate: string,
+  endDate: string,
+  name?: string,
+): Promise<HydratedPlan> {
+  await db
+    .update(mealPlans)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(eq(mealPlans.userId, userId), eq(mealPlans.isActive, true)));
 
-  const planName = name?.trim() || `Week of ${startDate}`;
-  const result = db
-    .prepare('INSERT INTO meal_plans (name, startDate, endDate, isActive) VALUES (?, ?, ?, 1)')
-    .run(planName, startDate, endDate);
+  const [plan] = await db
+    .insert(mealPlans)
+    .values({ userId, name: name?.trim() || `Week of ${startDate}`, startDate, endDate, isActive: true })
+    .returning();
 
-  const plan = db
-    .prepare('SELECT * FROM meal_plans WHERE id = ?')
-    .get(result.lastInsertRowid) as DbMealPlan;
-
-  return { ...plan, isActive: true, entries: [] };
+  return { ...plan, entries: [] };
 }
 
-export function getActivePlan(): HydratedPlan | null {
-  const plan = db
-    .prepare('SELECT * FROM meal_plans WHERE isActive = 1 ORDER BY createdAt DESC LIMIT 1')
-    .get() as DbMealPlan | undefined;
-
+export async function getActivePlan(userId: string): Promise<HydratedPlan | null> {
+  const plan = (
+    await db
+      .select()
+      .from(mealPlans)
+      .where(and(eq(mealPlans.userId, userId), eq(mealPlans.isActive, true)))
+      .orderBy(desc(mealPlans.createdAt))
+      .limit(1)
+  )[0];
   if (!plan) return null;
 
-  const entries = db
-    .prepare(
-      'SELECT * FROM meal_plan_entries WHERE mealPlanId = ? ORDER BY date ASC, sortOrder ASC, id ASC'
-    )
-    .all(plan.id) as DbMealPlanEntry[];
+  const entries = await db
+    .select()
+    .from(mealPlanEntries)
+    .where(eq(mealPlanEntries.mealPlanId, plan.id))
+    .orderBy(asc(mealPlanEntries.date), asc(mealPlanEntries.sortOrder), asc(mealPlanEntries.id));
 
-  return {
-    ...plan,
-    isActive: plan.isActive === 1,
-    entries: entries.map(hydrateEntry),
-  };
+  return { ...plan, entries: await Promise.all(entries.map(hydrateEntry)) };
 }
 
-export function addEntry(
+export async function addEntry(
+  userId: string,
   planId: number,
   recipeId: string,
   date: string,
   mealSlot: MealSlot,
-  servings: number
-): HydratedEntry {
+  servings: number,
+): Promise<HydratedEntry> {
   if (!VALID_SLOTS.includes(mealSlot)) {
     throw new Error(`Invalid meal slot: ${mealSlot}. Must be one of ${VALID_SLOTS.join(', ')}`);
   }
-
-  const plan = db.prepare('SELECT id FROM meal_plans WHERE id = ?').get(planId);
+  const plan = await ownedPlan(planId, userId);
   if (!plan) throw new Error(`Meal plan ${planId} not found`);
 
-  const recipe = db.prepare('SELECT id FROM recipes WHERE id = ?').get(recipeId);
+  const recipe = (
+    await db.select({ id: recipes.id }).from(recipes).where(and(eq(recipes.id, recipeId), eq(recipes.userId, userId))).limit(1)
+  )[0];
   if (!recipe) throw new Error(`Recipe ${recipeId} not found`);
 
-  const countRow = db
-    .prepare(
-      'SELECT COUNT(*) as c FROM meal_plan_entries WHERE mealPlanId = ? AND date = ? AND mealSlot = ?'
-    )
-    .get(planId, date, mealSlot) as { c: number };
+  const c = Number(
+    (
+      await db
+        .select({ c: count() })
+        .from(mealPlanEntries)
+        .where(and(eq(mealPlanEntries.mealPlanId, planId), eq(mealPlanEntries.date, date), eq(mealPlanEntries.mealSlot, mealSlot)))
+    )[0].c,
+  );
 
-  const result = db
-    .prepare(
-      'INSERT INTO meal_plan_entries (mealPlanId, recipeId, date, mealSlot, servings, sortOrder) VALUES (?, ?, ?, ?, ?, ?)'
-    )
-    .run(planId, recipeId, date, mealSlot, servings, countRow.c);
-
-  const entry = db
-    .prepare('SELECT * FROM meal_plan_entries WHERE id = ?')
-    .get(result.lastInsertRowid) as DbMealPlanEntry;
+  const [entry] = await db
+    .insert(mealPlanEntries)
+    .values({ mealPlanId: planId, recipeId, date, mealSlot, servings, sortOrder: c })
+    .returning();
 
   return hydrateEntry(entry);
 }
 
-export function updateEntry(
+export async function updateEntry(
+  userId: string,
   entryId: number,
-  updates: { date?: string; mealSlot?: MealSlot; servings?: number; notes?: string }
-): HydratedEntry {
-  const entry = db
-    .prepare('SELECT * FROM meal_plan_entries WHERE id = ?')
-    .get(entryId) as DbMealPlanEntry | undefined;
-
+  updates: { date?: string; mealSlot?: MealSlot; servings?: number; notes?: string },
+): Promise<HydratedEntry> {
+  const entry = await ownedEntry(entryId, userId);
   if (!entry) throw new Error(`Entry ${entryId} not found`);
-
   if (updates.mealSlot && !VALID_SLOTS.includes(updates.mealSlot)) {
     throw new Error(`Invalid meal slot: ${updates.mealSlot}`);
   }
 
-  const newDate = updates.date ?? entry.date;
-  const newSlot = updates.mealSlot ?? (entry.mealSlot as MealSlot);
-  const newServings = updates.servings ?? entry.servings;
-  const newNotes = updates.notes !== undefined ? updates.notes : entry.notes;
-
-  db.prepare(
-    'UPDATE meal_plan_entries SET date = ?, mealSlot = ?, servings = ?, notes = ? WHERE id = ?'
-  ).run(newDate, newSlot, newServings, newNotes, entryId);
-
-  const updated = db
-    .prepare('SELECT * FROM meal_plan_entries WHERE id = ?')
-    .get(entryId) as DbMealPlanEntry;
+  const [updated] = await db
+    .update(mealPlanEntries)
+    .set({
+      date: updates.date ?? entry.date,
+      mealSlot: updates.mealSlot ?? entry.mealSlot,
+      servings: updates.servings ?? entry.servings,
+      notes: updates.notes !== undefined ? updates.notes : entry.notes,
+    })
+    .where(eq(mealPlanEntries.id, entryId))
+    .returning();
 
   return hydrateEntry(updated);
 }
 
-export function removeEntry(entryId: number): void {
-  const entry = db.prepare('SELECT id FROM meal_plan_entries WHERE id = ?').get(entryId);
+export async function removeEntry(userId: string, entryId: number): Promise<void> {
+  const entry = await ownedEntry(entryId, userId);
   if (!entry) throw new Error(`Entry ${entryId} not found`);
-  db.prepare('DELETE FROM meal_plan_entries WHERE id = ?').run(entryId);
+  await db.delete(mealPlanEntries).where(eq(mealPlanEntries.id, entryId));
 }
 
-export function markCooked(entryId: number): HydratedEntry {
-  const entry = db
-    .prepare('SELECT * FROM meal_plan_entries WHERE id = ?')
-    .get(entryId) as DbMealPlanEntry | undefined;
-
+export async function markCooked(userId: string, entryId: number): Promise<HydratedEntry> {
+  const entry = await ownedEntry(entryId, userId);
   if (!entry) throw new Error(`Entry ${entryId} not found`);
 
-  db.prepare(
-    "UPDATE meal_plan_entries SET isCooked = 1, cookedAt = datetime('now') WHERE id = ?"
-  ).run(entryId);
+  await db
+    .update(mealPlanEntries)
+    .set({ isCooked: true, cookedAt: new Date() })
+    .where(eq(mealPlanEntries.id, entryId));
 
   try {
-    depletFromRecipe(entry.recipeId, entry.servings);
-  } catch (_e) {
+    await depletFromRecipe(userId, entry.recipeId, entry.servings);
+  } catch {
     // Non-fatal — pantry may be empty or have no matching items
   }
 
-  const updated = db
-    .prepare('SELECT * FROM meal_plan_entries WHERE id = ?')
-    .get(entryId) as DbMealPlanEntry;
-
+  const [updated] = await db.select().from(mealPlanEntries).where(eq(mealPlanEntries.id, entryId)).limit(1);
   return hydrateEntry(updated);
 }
 
-export function duplicateDay(
+export async function duplicateDay(
+  userId: string,
   planId: number,
   sourceDate: string,
-  targetDate: string
-): HydratedEntry[] {
-  const entries = db
-    .prepare(
-      'SELECT * FROM meal_plan_entries WHERE mealPlanId = ? AND date = ? ORDER BY sortOrder ASC'
-    )
-    .all(planId, sourceDate) as DbMealPlanEntry[];
+  targetDate: string,
+): Promise<HydratedEntry[]> {
+  const plan = await ownedPlan(planId, userId);
+  if (!plan) return [];
 
+  const entries = await db
+    .select()
+    .from(mealPlanEntries)
+    .where(and(eq(mealPlanEntries.mealPlanId, planId), eq(mealPlanEntries.date, sourceDate)))
+    .orderBy(asc(mealPlanEntries.sortOrder));
   if (entries.length === 0) return [];
 
-  const insert = db.prepare(
-    'INSERT INTO meal_plan_entries (mealPlanId, recipeId, date, mealSlot, servings, sortOrder) VALUES (?, ?, ?, ?, ?, ?)'
-  );
-
-  const newEntries: HydratedEntry[] = [];
-
-  const run = db.transaction(() => {
-    for (const entry of entries) {
-      const r = insert.run(
-        planId,
-        entry.recipeId,
-        targetDate,
-        entry.mealSlot,
-        entry.servings,
-        entry.sortOrder
-      );
-      const newEntry = db
-        .prepare('SELECT * FROM meal_plan_entries WHERE id = ?')
-        .get(r.lastInsertRowid) as DbMealPlanEntry;
-      newEntries.push(hydrateEntry(newEntry));
+  const inserted: DbMealPlanEntry[] = [];
+  await db.transaction(async (tx) => {
+    for (const e of entries) {
+      const [n] = await tx
+        .insert(mealPlanEntries)
+        .values({
+          mealPlanId: planId,
+          recipeId: e.recipeId,
+          date: targetDate,
+          mealSlot: e.mealSlot,
+          servings: e.servings,
+          sortOrder: e.sortOrder,
+        })
+        .returning();
+      inserted.push(n);
     }
   });
 
-  run();
-  return newEntries;
+  return Promise.all(inserted.map(hydrateEntry));
 }
 
 // ── Nutrition ─────────────────────────────────────────────────────────────────
 
-export function getDayNutrition(planId: number, date: string): DayNutritionResult {
-  const entries = db
-    .prepare('SELECT * FROM meal_plan_entries WHERE mealPlanId = ? AND date = ?')
-    .all(planId, date) as DbMealPlanEntry[];
+export async function getDayNutrition(userId: string, planId: number, date: string): Promise<DayNutritionResult> {
+  const plan = await ownedPlan(planId, userId);
+  if (!plan) throw new Error(`Plan ${planId} not found`);
 
-  const goalRow = db
-    .prepare('SELECT * FROM nutrition_goals WHERE isActive = 1 LIMIT 1')
-    .get() as DbNutritionGoal;
+  const entries = await db
+    .select()
+    .from(mealPlanEntries)
+    .where(and(eq(mealPlanEntries.mealPlanId, planId), eq(mealPlanEntries.date, date)));
 
+  const goalRow = await getOrCreateActiveGoal(userId);
   const totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
 
   for (const entry of entries) {
-    const recipe = db
-      .prepare(
-        'SELECT caloriesPerServing, proteinGrams, carbsGrams, fatGrams, fiberGrams FROM recipes WHERE id = ?'
-      )
-      .get(entry.recipeId) as {
-      caloriesPerServing: number | null;
-      proteinGrams: number | null;
-      carbsGrams: number | null;
-      fatGrams: number | null;
-      fiberGrams: number | null;
-    } | undefined;
+    const recipe = (
+      await db
+        .select({
+          caloriesPerServing: recipes.caloriesPerServing,
+          proteinGrams: recipes.proteinGrams,
+          carbsGrams: recipes.carbsGrams,
+          fatGrams: recipes.fatGrams,
+          fiberGrams: recipes.fiberGrams,
+        })
+        .from(recipes)
+        .where(eq(recipes.id, entry.recipeId))
+        .limit(1)
+    )[0];
 
     if (recipe?.caloriesPerServing != null) {
       totals.calories += Math.round((recipe.caloriesPerServing ?? 0) * entry.servings);
@@ -301,146 +317,91 @@ export function getDayNutrition(planId: number, date: string): DayNutritionResul
     }
   }
 
-  const percentages = goalRow
-    ? {
-        calories: Math.min(Math.round((totals.calories / goalRow.caloriesTarget) * 100), 999),
-        protein: Math.min(Math.round((totals.protein / goalRow.proteinTarget) * 100), 999),
-        carbs: Math.min(Math.round((totals.carbs / goalRow.carbsTarget) * 100), 999),
-        fat: Math.min(Math.round((totals.fat / goalRow.fatTarget) * 100), 999),
-        fiber: Math.min(Math.round((totals.fiber / goalRow.fiberTarget) * 100), 999),
-      }
-    : { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
-
-  return {
-    date,
-    totals,
-    goals: serializeGoal(goalRow),
-    percentages,
+  const pct = (val: number, target: number) => Math.min(Math.round((val / target) * 100), 999);
+  const percentages = {
+    calories: pct(totals.calories, goalRow.caloriesTarget),
+    protein: pct(totals.protein, goalRow.proteinTarget),
+    carbs: pct(totals.carbs, goalRow.carbsTarget),
+    fat: pct(totals.fat, goalRow.fatTarget),
+    fiber: pct(totals.fiber, goalRow.fiberTarget),
   };
+
+  return { date, totals, goals: goalRow, percentages };
 }
 
-export function getWeekNutrition(planId: number): DayNutritionResult[] {
-  const plan = db
-    .prepare('SELECT * FROM meal_plans WHERE id = ?')
-    .get(planId) as DbMealPlan | undefined;
-
+export async function getWeekNutrition(userId: string, planId: number): Promise<DayNutritionResult[]> {
+  const plan = await ownedPlan(planId, userId);
   if (!plan) throw new Error(`Plan ${planId} not found`);
 
   const results: DayNutritionResult[] = [];
   const start = new Date(plan.startDate);
-
   for (let i = 0; i < 7; i++) {
     const d = new Date(start);
     d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().split('T')[0];
-    results.push(getDayNutrition(planId, dateStr));
+    results.push(await getDayNutrition(userId, planId, d.toISOString().split('T')[0]));
   }
-
   return results;
 }
 
 // ── Grocery list generation ───────────────────────────────────────────────────
 
-export function generateGroceryListFromPlan(
-  planId: number
-): { listId: number; itemCount: number } {
-  const plan = db
-    .prepare('SELECT * FROM meal_plans WHERE id = ?')
-    .get(planId) as DbMealPlan | undefined;
-
+export async function generateGroceryListFromPlan(
+  userId: string,
+  planId: number,
+): Promise<{ listId: number; itemCount: number }> {
+  const plan = await ownedPlan(planId, userId);
   if (!plan) throw new Error(`Plan ${planId} not found`);
 
-  const entries = db
-    .prepare('SELECT DISTINCT recipeId FROM meal_plan_entries WHERE mealPlanId = ?')
-    .all(planId) as { recipeId: string }[];
-
+  const entries = await db
+    .selectDistinct({ recipeId: mealPlanEntries.recipeId })
+    .from(mealPlanEntries)
+    .where(eq(mealPlanEntries.mealPlanId, planId));
   if (entries.length === 0) throw new Error('No entries in this plan');
 
   const recipeIds = entries.map((e) => e.recipeId);
-  const items = buildListFromRecipes(recipeIds, true); // subtract pantry
+  const items = await buildListFromRecipes(userId, recipeIds, true);
 
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const listName = `${plan.name} — ${dateStr}`;
+  const listName = `${plan.name} ${dateStr}`;
 
-  const insertList = db.prepare('INSERT INTO grocery_lists (name, recipeIds) VALUES (?, ?)');
-  const insertItem = db.prepare(`
-    INSERT INTO grocery_list_items
-      (listId, recipeId, recipeIds, item, quantity, unit, numericQuantity, aisle, sortOrder)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  let listId = 0;
-
-  const run = db.transaction(() => {
-    const r = insertList.run(listName, JSON.stringify(recipeIds));
-    listId = r.lastInsertRowid as number;
-    for (const item of items) {
-      insertItem.run(
-        listId,
-        item.recipeId,
-        item.recipeIds,
-        item.item,
-        item.quantity,
-        item.unit,
-        item.numericQuantity,
-        item.aisle,
-        item.sortOrder
-      );
+  const list = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(groceryLists)
+      .values({ userId, name: listName, recipeIds: JSON.stringify(recipeIds) })
+      .returning();
+    if (items.length > 0) {
+      await tx.insert(groceryListItems).values(items.map((it) => ({ ...it, listId: created.id })));
     }
+    return created;
   });
 
-  run();
-
-  return { listId, itemCount: items.length };
+  return { listId: list.id, itemCount: items.length };
 }
 
 // ── Nutrition goals ───────────────────────────────────────────────────────────
 
-export function getGoals(): ReturnType<typeof serializeGoal> {
-  const goals = db
-    .prepare('SELECT * FROM nutrition_goals WHERE isActive = 1 LIMIT 1')
-    .get() as DbNutritionGoal | undefined;
-
-  if (!goals) throw new Error('No nutrition goals found');
-  return serializeGoal(goals);
+export async function getGoals(userId: string): Promise<DbNutritionGoal> {
+  return getOrCreateActiveGoal(userId);
 }
 
-export function updateGoals(updates: {
-  caloriesTarget?: number;
-  proteinTarget?: number;
-  carbsTarget?: number;
-  fatTarget?: number;
-  fiberTarget?: number;
-}): ReturnType<typeof serializeGoal> {
-  const goals = db
-    .prepare('SELECT * FROM nutrition_goals WHERE isActive = 1 LIMIT 1')
-    .get() as DbNutritionGoal | undefined;
-
-  if (!goals) throw new Error('No nutrition goals found');
-
-  db.prepare(`
-    UPDATE nutrition_goals SET
-      caloriesTarget = ?,
-      proteinTarget = ?,
-      carbsTarget = ?,
-      fatTarget = ?,
-      fiberTarget = ?,
-      updatedAt = datetime('now')
-    WHERE id = ?
-  `).run(
-    updates.caloriesTarget ?? goals.caloriesTarget,
-    updates.proteinTarget ?? goals.proteinTarget,
-    updates.carbsTarget ?? goals.carbsTarget,
-    updates.fatTarget ?? goals.fatTarget,
-    updates.fiberTarget ?? goals.fiberTarget,
-    goals.id
-  );
-
-  const updated = db
-    .prepare('SELECT * FROM nutrition_goals WHERE id = ?')
-    .get(goals.id) as DbNutritionGoal;
-
-  return serializeGoal(updated);
+export async function updateGoals(
+  userId: string,
+  updates: { caloriesTarget?: number; proteinTarget?: number; carbsTarget?: number; fatTarget?: number; fiberTarget?: number },
+): Promise<DbNutritionGoal> {
+  const goal = await getOrCreateActiveGoal(userId);
+  const [updated] = await db
+    .update(nutritionGoals)
+    .set({
+      caloriesTarget: updates.caloriesTarget ?? goal.caloriesTarget,
+      proteinTarget: updates.proteinTarget ?? goal.proteinTarget,
+      carbsTarget: updates.carbsTarget ?? goal.carbsTarget,
+      fatTarget: updates.fatTarget ?? goal.fatTarget,
+      fiberTarget: updates.fiberTarget ?? goal.fiberTarget,
+      updatedAt: new Date(),
+    })
+    .where(eq(nutritionGoals.id, goal.id))
+    .returning();
+  return updated;
 }
 
 // ── AI goal suggestion ────────────────────────────────────────────────────────
@@ -488,6 +449,5 @@ Return JSON only:
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('AI did not return valid JSON');
 
-  const parsed = GoalSuggestionSchema.parse(JSON.parse(jsonMatch[0]));
-  return parsed;
+  return GoalSuggestionSchema.parse(JSON.parse(jsonMatch[0]));
 }

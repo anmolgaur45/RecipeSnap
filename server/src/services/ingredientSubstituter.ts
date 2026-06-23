@@ -7,7 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import type { DbIngredient, DbRecipe, DbStep } from '../db/schema';
+import type { DbIngredient, DbRecipe, DbStep } from '../db/schema.pg';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

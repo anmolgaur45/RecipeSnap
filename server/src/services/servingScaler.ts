@@ -4,7 +4,6 @@
  * applying smart rounding rules and auto-converting to friendlier units.
  */
 
-import { DbIngredient } from '../db/schema';
 import { getUnitFamily, toBase } from '../utils/unitConversion';
 import { parseIngredient } from '../utils/ingredientParser';
 
@@ -184,18 +183,24 @@ function fromBaseGForScaling(g: number, originalUnit: string): { qty: number; un
 
 const TO_TASTE_PATTERNS = ['to taste', 'as needed', 'as desired', 'to preference', 'pinch'];
 
-export type ScaledIngredient = DbIngredient;
+/** Minimal shape the scaler needs; works with any row carrying these fields. */
+export interface ScalableIngredient {
+  item: string;
+  quantity: string;
+  unit: string | null;
+  numericQuantity: number | null;
+}
 
 /**
  * Scale a list of ingredients from originalServings to targetServings.
- * Returns a new array — original objects are not mutated.
+ * Returns a new array, original objects are not mutated.
  * "To taste" items and items with no numericQuantity are passed through unchanged.
  */
-export function scaleIngredients(
-  ingredients: DbIngredient[],
+export function scaleIngredients<T extends ScalableIngredient>(
+  ingredients: T[],
   originalServings: number,
   targetServings: number,
-): ScaledIngredient[] {
+): T[] {
   if (originalServings <= 0 || targetServings <= 0) return ingredients;
   const ratio = targetServings / originalServings;
   if (ratio === 1) return ingredients;
@@ -241,6 +246,6 @@ export function scaleIngredients(
     const rounded = roundByUnit(qty, newUnit);
     const quantity = formatQuantity(rounded, newUnit);
 
-    return { ...ing, numericQuantity: rounded, unit: newUnit, quantity };
+    return { ...ing, numericQuantity: rounded, unit: newUnit, quantity } as T;
   });
 }

@@ -3,8 +3,11 @@ import { z } from 'zod';
 import type { toRecipeRecord } from '../services/recipeStructurer';
 import { createJob, getJob } from '../queue/jobStore';
 import { runExtractionJob } from '../queue/extractWorker';
+import { requireAuth } from '../middleware/auth';
 
 export const extractRouter = Router();
+
+extractRouter.use(requireAuth);
 
 // The recipe object shape returned by toRecipeRecord and sent to the frontend
 export type RecipeRecord = ReturnType<typeof toRecipeRecord>;
@@ -34,7 +37,7 @@ extractRouter.post('/', (req, res) => {
     return;
   }
 
-  const job = createJob(parseResult.data.url);
+  const job = createJob(parseResult.data.url, req.userId!);
   void runExtractionJob(job); // fire-and-forget
   res.json({ jobId: job.id });
 });
@@ -45,7 +48,7 @@ extractRouter.post('/', (req, res) => {
  */
 extractRouter.get('/jobs/:id', (req, res) => {
   const job = getJob(req.params.id);
-  if (!job) {
+  if (!job || job.userId !== req.userId) {
     res.status(404).json({ error: 'Job not found' });
     return;
   }

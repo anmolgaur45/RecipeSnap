@@ -11,8 +11,14 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { db } from '../db/schema';
-import type { DbIngredient, DbRecipe, DbStep } from '../db/schema';
+import { asc, eq } from 'drizzle-orm';
+import { db } from '../db/client';
+import {
+  recipes,
+  ingredients as ingredientsTable,
+  steps as stepsTable,
+  recipeTags,
+} from '../db/schema.pg';
 
 // ── In-memory dedup cache ─────────────────────────────────────────────────────
 
@@ -69,22 +75,26 @@ export async function tagRecipe(recipeId: string): Promise<void> {
     return;
   }
 
-  const recipe = db
-    .prepare('SELECT * FROM recipes WHERE id = ?')
-    .get(recipeId) as DbRecipe | undefined;
+  const recipe = (
+    await db.select().from(recipes).where(eq(recipes.id, recipeId)).limit(1)
+  )[0];
 
   if (!recipe) {
     console.warn(`[autoTagger] recipe ${recipeId} not found in DB`);
     return;
   }
 
-  const ingredients = db
-    .prepare('SELECT * FROM ingredients WHERE recipeId = ? ORDER BY sortOrder ASC')
-    .all(recipeId) as DbIngredient[];
+  const ingredients = await db
+    .select()
+    .from(ingredientsTable)
+    .where(eq(ingredientsTable.recipeId, recipeId))
+    .orderBy(asc(ingredientsTable.sortOrder));
 
-  const steps = db
-    .prepare('SELECT * FROM steps WHERE recipeId = ? ORDER BY stepNumber ASC')
-    .all(recipeId) as DbStep[];
+  const steps = await db
+    .select()
+    .from(stepsTable)
+    .where(eq(stepsTable.recipeId, recipeId))
+    .orderBy(asc(stepsTable.stepNumber));
 
   // ── Stage 1: Deterministic tags ──────────────────────────────────────────
   const deterministicTags: Array<{ tag: string; type: string }> = [];
@@ -154,17 +164,15 @@ ${stepsContext}`;
   // ── Persist tags ─────────────────────────────────────────────────────────
   const allTags = [...deterministicTags, ...aiTags];
 
-  const insert = db.prepare(
-    'INSERT INTO recipe_tags (recipeId, tag, type) VALUES (?, ?, ?)',
-  );
-
-  db.transaction(() => {
+  await db.transaction(async (tx) => {
     // Clear existing tags first (safe to re-tag)
-    db.prepare('DELETE FROM recipe_tags WHERE recipeId = ?').run(recipeId);
-    for (const t of allTags) {
-      insert.run(recipeId, t.tag, t.type);
+    await tx.delete(recipeTags).where(eq(recipeTags.recipeId, recipeId));
+    if (allTags.length > 0) {
+      await tx.insert(recipeTags).values(
+        allTags.map((t) => ({ recipeId, tag: t.tag, type: t.type })),
+      );
     }
-  })();
+  });
 
   taggedRecipes.add(recipeId);
 }

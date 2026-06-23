@@ -1,55 +1,58 @@
-import { Router, Request, Response } from 'express';
-import { db } from '../db/schema';
+import { Router, type Request, type Response, type RequestHandler } from 'express';
+import { and, asc, count, desc, eq, notExists, sql } from 'drizzle-orm';
+import { db } from '../db/client';
+import { recipeTags, recipes } from '../db/schema.pg';
 import { tagRecipe } from '../services/autoTagger';
+import { requireAuth } from '../middleware/auth';
 
 export const tagsRouter = Router();
 
-/**
- * GET /api/tags — return all recipe tags grouped by type.
- * Only types that have at least one tag are included.
- * Tags within each type are sorted by frequency (most common first).
- *
- * Response: { cuisine?: string[], diet?: string[], method?: string[], time?: string[], category?: string[], custom?: string[] }
- */
-tagsRouter.get('/', (_req: Request, res: Response) => {
-  const rows = db
-    .prepare(
-      `SELECT type, tag, COUNT(*) as cnt
-       FROM recipe_tags
-       GROUP BY type, tag
-       ORDER BY type ASC, cnt DESC`,
-    )
-    .all() as Array<{ type: string; tag: string; cnt: number }>;
+const ah =
+  (fn: (req: Request, res: Response) => Promise<void>): RequestHandler =>
+  (req, res, next) => {
+    fn(req, res).catch(next);
+  };
 
-  const grouped: Record<string, string[]> = {};
-  for (const row of rows) {
-    if (!grouped[row.type]) grouped[row.type] = [];
-    grouped[row.type].push(row.tag);
-  }
+tagsRouter.use(requireAuth);
 
-  res.json(grouped);
-});
+/** GET /api/tags — this user's recipe tags grouped by type, most common first. */
+tagsRouter.get(
+  '/',
+  ah(async (req, res) => {
+    const rows = await db
+      .select({ type: recipeTags.type, tag: recipeTags.tag, cnt: count() })
+      .from(recipeTags)
+      .innerJoin(recipes, eq(recipeTags.recipeId, recipes.id))
+      .where(eq(recipes.userId, req.userId!))
+      .groupBy(recipeTags.type, recipeTags.tag)
+      .orderBy(asc(recipeTags.type), desc(count()));
 
-/**
- * POST /api/tags/backfill — tag all recipes that have no tags yet.
- * Useful for seeding tags on existing recipes without re-extraction.
- * Runs async; returns immediately with a list of recipe IDs being processed.
- */
-tagsRouter.post('/backfill', async (_req: Request, res: Response) => {
-  const untagged = db
-    .prepare(
-      `SELECT DISTINCT r.id FROM recipes r
-       WHERE NOT EXISTS (SELECT 1 FROM recipe_tags rt WHERE rt.recipeId = r.id)`,
-    )
-    .all() as Array<{ id: string }>;
+    const grouped: Record<string, string[]> = {};
+    for (const row of rows) {
+      (grouped[row.type] ??= []).push(row.tag);
+    }
+    res.json(grouped);
+  }),
+);
 
-  const ids = untagged.map((r) => r.id);
-  res.json({ queued: ids.length, recipeIds: ids });
+/** POST /api/tags/backfill — tag this user's recipes that have no tags yet. */
+tagsRouter.post(
+  '/backfill',
+  ah(async (req, res) => {
+    const untagged = await db
+      .select({ id: recipes.id })
+      .from(recipes)
+      .where(
+        and(
+          eq(recipes.userId, req.userId!),
+          notExists(db.select({ x: sql`1` }).from(recipeTags).where(eq(recipeTags.recipeId, recipes.id))),
+        ),
+      );
+    const ids = untagged.map((r) => r.id);
+    res.json({ queued: ids.length, recipeIds: ids });
 
-  // Run tagging in background after response is sent
-  for (const { id } of untagged) {
-    await tagRecipe(id).catch((e: unknown) => {
-      console.warn(`[backfill] failed for ${id}:`, e);
-    });
-  }
-});
+    for (const id of ids) {
+      await tagRecipe(id).catch((e: unknown) => console.warn(`[backfill] failed for ${id}:`, e));
+    }
+  }),
+);

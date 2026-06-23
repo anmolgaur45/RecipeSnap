@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { initDb } from './db/schema';
+import path from 'path';
 import { extractRouter } from './routes/extract';
 import { recipesRouter } from './routes/recipes';
 import { groceryRouter } from './routes/grocery';
@@ -12,6 +12,8 @@ import { tagsRouter } from './routes/tags';
 import { mealPlanRouter } from './routes/mealPlan';
 import { recommendRouter } from './routes/recommend';
 import { cookRouter } from './routes/cook';
+import { preferencesRouter } from './routes/preferences';
+import { importRecipeRouter } from './routes/importRecipe';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -19,6 +21,13 @@ const PORT = Number(process.env.PORT ?? 3001);
 // Middleware
 app.use(cors({ origin: process.env.CORS_ORIGIN ?? '*' }));
 app.use(express.json({ limit: '10mb' }));
+
+// Serve persisted recipe thumbnails (extracted keyframes)
+const thumbnailsDir = path.resolve(
+  process.env.THUMBNAILS_DIR ??
+  path.join(path.dirname(process.env.DB_PATH ?? './data/recipesnap.db'), 'thumbnails')
+);
+app.use('/thumbnails', express.static(thumbnailsDir));
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -36,6 +45,8 @@ app.use('/api/tags', tagsRouter);
 app.use('/api/meal-plans', mealPlanRouter);
 app.use('/api/recommendations', recommendRouter);
 app.use('/api/cook', cookRouter);
+app.use('/api', preferencesRouter);
+app.use('/api', importRecipeRouter);
 
 // 404 handler
 app.use((_req, res) => {
@@ -49,7 +60,6 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 });
 
 // Boot
-initDb();
 const server = app.listen(PORT, () => {
   console.log(`🍳 RecipeSnap server running on http://localhost:${PORT}`);
   console.log(`   Anthropic: ${process.env.ANTHROPIC_API_KEY ? '✓ (OCR + structuring)' : '✗ (set ANTHROPIC_API_KEY)'}`);

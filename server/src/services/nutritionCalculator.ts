@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { db } from '../db/schema';
+import { eq } from 'drizzle-orm';
+import { db } from '../db/client';
+import { nutritionCache } from '../db/schema.pg';
 import { WEIGHT_TO_G, VOLUME_TO_TSP, getUnitFamily } from '../utils/unitConversion';
 import { parseIngredient } from '../utils/ingredientParser';
 
@@ -192,29 +194,40 @@ interface NutritionPer100g {
   sodium: number;
 }
 
-function getCached(foodName: string): NutritionPer100g | null {
-  const row = db
-    .prepare(
-      'SELECT calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugar_100g, sodium_100g FROM nutrition_cache WHERE food_name = ?',
-    )
-    .get(foodName) as {
-      calories_100g: number; protein_100g: number; carbs_100g: number;
-      fat_100g: number; fiber_100g: number; sugar_100g: number; sodium_100g: number;
-    } | undefined;
-
-  if (!row) return null;
-  return {
-    calories: row.calories_100g, protein: row.protein_100g, carbs: row.carbs_100g,
-    fat: row.fat_100g, fiber: row.fiber_100g, sugar: row.sugar_100g, sodium: row.sodium_100g,
-  };
+async function getCached(foodName: string): Promise<NutritionPer100g | null> {
+  const row = (
+    await db
+      .select({
+        calories: nutritionCache.calories100g,
+        protein: nutritionCache.protein100g,
+        carbs: nutritionCache.carbs100g,
+        fat: nutritionCache.fat100g,
+        fiber: nutritionCache.fiber100g,
+        sugar: nutritionCache.sugar100g,
+        sodium: nutritionCache.sodium100g,
+      })
+      .from(nutritionCache)
+      .where(eq(nutritionCache.foodName, foodName))
+      .limit(1)
+  )[0];
+  return row ?? null;
 }
 
-function setCache(foodName: string, data: NutritionPer100g, source: string): void {
-  db.prepare(`
-    INSERT OR REPLACE INTO nutrition_cache
-      (food_name, calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugar_100g, sodium_100g, source, cached_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-  `).run(foodName, data.calories, data.protein, data.carbs, data.fat, data.fiber, data.sugar, data.sodium, source);
+async function setCache(foodName: string, data: NutritionPer100g, source: string): Promise<void> {
+  const values = {
+    calories100g: data.calories,
+    protein100g: data.protein,
+    carbs100g: data.carbs,
+    fat100g: data.fat,
+    fiber100g: data.fiber,
+    sugar100g: data.sugar,
+    sodium100g: data.sodium,
+    source,
+  };
+  await db
+    .insert(nutritionCache)
+    .values({ foodName, ...values })
+    .onConflictDoUpdate({ target: nutritionCache.foodName, set: { ...values, cachedAt: new Date() } });
 }
 
 // ── USDA FoodData Central API ─────────────────────────────────────────────────
@@ -277,12 +290,12 @@ async function lookupUsda(query: string): Promise<NutritionPer100g | null> {
 }
 
 async function getNutritionPer100g(foodName: string): Promise<NutritionPer100g | null> {
-  const cached = getCached(foodName);
+  const cached = await getCached(foodName);
   if (cached) return cached;
 
   const result = await lookupUsda(foodName);
   if (result) {
-    setCache(foodName, result, 'usda');
+    await setCache(foodName, result, 'usda');
     return result;
   }
   return null;

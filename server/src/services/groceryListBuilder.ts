@@ -1,9 +1,8 @@
-import { db, DbGroceryList, DbGroceryListItem, DbIngredient, DbPantryItem } from '../db/schema';
+import { asc, eq } from 'drizzle-orm';
+import { db } from '../db/client';
+import { ingredients as ingredientsTable, pantry as pantryTable, type DbGroceryListItem } from '../db/schema.pg';
 import { parseIngredient, classifyAisle } from '../utils/ingredientParser';
-import {
-  VOLUME_TO_TSP, WEIGHT_TO_G, UnitFamily,
-  getUnitFamily, toBase, fromBaseTsp, fromBaseG,
-} from '../utils/unitConversion';
+import { UnitFamily, getUnitFamily, toBase, fromBaseTsp, fromBaseG } from '../utils/unitConversion';
 
 // ── Item name normalization ────────────────────────────────────────────────────
 
@@ -24,18 +23,23 @@ export function normalizeItemName(item: string): string {
 // ── Aisle sort order ──────────────────────────────────────────────────────────
 
 export const AISLE_ORDER: Record<string, number> = {
-  produce: 0,
-  dairy: 1,
-  bakery: 2,
-  meat: 3,
-  frozen: 4,
-  spices: 5,
-  pantry: 6,
-  beverages: 7,
-  other: 8,
+  produce: 0, dairy: 1, bakery: 2, meat: 3, frozen: 4, spices: 5, pantry: 6, beverages: 7, other: 8,
 };
 
-// ── Consolidated item intermediate type ──────────────────────────────────────
+// ── Structural inputs (db-agnostic so the logic is unit-testable) ─────────────
+
+export interface SourcedIngredient {
+  item: string;
+  quantity: string;
+  sourceRecipeId: string;
+}
+
+export interface PantryLike {
+  item: string;
+  quantity: string | null;
+  unit: string | null;
+  isStaple: boolean;
+}
 
 interface Consolidated {
   item: string;
@@ -51,45 +55,30 @@ interface Consolidated {
   isToTaste: boolean;
 }
 
-// ── Main builder ──────────────────────────────────────────────────────────────
+// ── Pure consolidation (no DB) ─────────────────────────────────────────────────
 
 /**
- * Build a consolidated grocery list from one or more recipe IDs.
- * Returns items sorted by aisle order then alphabetically.
+ * Consolidate ingredient lines into grocery rows: parse, group by normalised name,
+ * sum compatible quantities, optionally subtract pantry, sort by aisle.
  */
-export function buildListFromRecipes(
-  recipeIds: string[],
-  subtractPantry: boolean
+export function consolidate(
+  allIngredients: SourcedIngredient[],
+  pantryItems: PantryLike[],
+  subtractPantry: boolean,
 ): Omit<DbGroceryListItem, 'id' | 'listId'>[] {
-  // ── Step 1: load ingredients from DB ────────────────────────────────────────
-  const allIngredients: (DbIngredient & { sourceRecipeId: string })[] = [];
-  for (const recipeId of recipeIds) {
-    const rows = db
-      .prepare('SELECT * FROM ingredients WHERE recipeId = ? ORDER BY sortOrder ASC')
-      .all(recipeId) as DbIngredient[];
-    for (const row of rows) {
-      allIngredients.push({ ...row, sourceRecipeId: recipeId });
-    }
-  }
-
-  // ── Step 2: parse + group by normalized item name ────────────────────────────
   const groups = new Map<string, Consolidated>();
-
   const TO_TASTE_PATTERNS = ['to taste', 'as needed', 'pinch', 'dash'];
 
   for (const ing of allIngredients) {
     const quantityLower = (ing.quantity ?? '').toLowerCase();
     const hasToTasteQty = TO_TASTE_PATTERNS.some((p) => quantityLower.includes(p));
 
-    // Don't prepend "to taste" / "as needed" to the item name — it confuses the parser
-    const rawText =
-      ing.quantity && !hasToTasteQty ? `${ing.quantity} ${ing.item}` : ing.item;
+    const rawText = ing.quantity && !hasToTasteQty ? `${ing.quantity} ${ing.item}` : ing.item;
     const parsed = parseIngredient(rawText.trim());
     const itemName = parsed.item || ing.item;
     const key = normalizeItemName(itemName);
     const isToTaste =
-      hasToTasteQty ||
-      (parsed.numericQuantity === null && (parsed.modifier != null || !ing.quantity));
+      hasToTasteQty || (parsed.numericQuantity === null && (parsed.modifier != null || !ing.quantity));
     const family = getUnitFamily(parsed.unit);
 
     const existing = groups.get(key);
@@ -114,7 +103,6 @@ export function buildListFromRecipes(
       if (!existing.sourceRecipeIds.includes(ing.sourceRecipeId)) {
         existing.sourceRecipeIds.push(ing.sourceRecipeId);
       }
-      // "to taste" items are never summed
       if (isToTaste || existing.isToTaste) {
         existing.isToTaste = true;
       } else if (
@@ -123,23 +111,18 @@ export function buildListFromRecipes(
         existing.family !== 'other' &&
         family === existing.family
       ) {
-        // Sum in base units
-        existing.totalBase =
-          (existing.totalBase ?? 0) + toBase(parsed.numericQuantity, parsed.unit);
+        existing.totalBase = (existing.totalBase ?? 0) + toBase(parsed.numericQuantity, parsed.unit);
       } else if (
         parsed.numericQuantity !== null &&
         existing.numericQuantity !== null &&
         existing.unit === parsed.unit
       ) {
-        // Same non-convertible unit (e.g. pieces) — just add
         existing.numericQuantity = existing.numericQuantity + parsed.numericQuantity;
       }
     }
   }
 
-  // ── Step 3: compute display quantities, build output rows ───────────────────
   const rows: Omit<DbGroceryListItem, 'id' | 'listId'>[] = [];
-
   for (const entry of groups.values()) {
     let displayQty: string | null = null;
     let displayUnit: string | null = entry.unit;
@@ -173,18 +156,14 @@ export function buildListFromRecipes(
       unit: displayUnit,
       numericQuantity: numericQty,
       aisle: entry.aisle,
-      isChecked: 0,
-      sortOrder: 0, // assigned after sort below
+      isChecked: false,
+      sortOrder: 0,
     });
   }
 
-  // ── Step 4: pantry subtraction ───────────────────────────────────────────────
   if (subtractPantry) {
-    const pantryItems = db.prepare('SELECT * FROM pantry').all() as DbPantryItem[];
-    const pantryMap = new Map<string, DbPantryItem>();
-    for (const p of pantryItems) {
-      pantryMap.set(normalizeItemName(p.item), p);
-    }
+    const pantryMap = new Map<string, PantryLike>();
+    for (const p of pantryItems) pantryMap.set(normalizeItemName(p.item), p);
 
     const kept: typeof rows = [];
     for (const row of rows) {
@@ -194,42 +173,22 @@ export function buildListFromRecipes(
         kept.push(row);
         continue;
       }
-      // Staple pantry item → remove from list entirely
-      if (pantry.isStaple === 1) continue;
+      if (pantry.isStaple) continue;
 
-      // Numeric subtraction if same unit family
-      if (
-        row.numericQuantity !== null &&
-        row.unit !== null &&
-        pantry.quantity !== null &&
-        pantry.unit !== null
-      ) {
-        const pantryParsed = parseIngredient(
-          `${pantry.quantity} ${pantry.unit} ${pantry.item}`
-        );
+      if (row.numericQuantity !== null && row.unit !== null && pantry.quantity !== null && pantry.unit !== null) {
+        const pantryParsed = parseIngredient(`${pantry.quantity} ${pantry.unit} ${pantry.item}`);
         const pantryFamily = getUnitFamily(pantryParsed.unit);
         const rowFamily = getUnitFamily(row.unit);
-        if (
-          pantryFamily === rowFamily &&
-          rowFamily !== 'other' &&
-          pantryParsed.numericQuantity !== null
-        ) {
+        if (pantryFamily === rowFamily && rowFamily !== 'other' && pantryParsed.numericQuantity !== null) {
           const neededBase = toBase(row.numericQuantity, row.unit);
           const haveBase = toBase(pantryParsed.numericQuantity, pantryParsed.unit ?? '');
           const remaining = neededBase - haveBase;
-          if (remaining <= 0) continue; // pantry covers full need
+          if (remaining <= 0) continue;
 
-          if (rowFamily === 'volume') {
-            const conv = fromBaseTsp(remaining);
-            row.numericQuantity = conv.qty;
-            row.unit = conv.unit;
-            row.quantity = `${conv.qty} ${conv.unit}`;
-          } else {
-            const conv = fromBaseG(remaining);
-            row.numericQuantity = conv.qty;
-            row.unit = conv.unit;
-            row.quantity = `${conv.qty} ${conv.unit}`;
-          }
+          const conv = rowFamily === 'volume' ? fromBaseTsp(remaining) : fromBaseG(remaining);
+          row.numericQuantity = conv.qty;
+          row.unit = conv.unit;
+          row.quantity = `${conv.qty} ${conv.unit}`;
         }
       }
       kept.push(row);
@@ -238,14 +197,12 @@ export function buildListFromRecipes(
     rows.push(...kept);
   }
 
-  // ── Step 5: sort by aisle order then alphabetically ──────────────────────────
   rows.sort((a, b) => {
     const oa = AISLE_ORDER[a.aisle ?? 'other'] ?? 8;
     const ob = AISLE_ORDER[b.aisle ?? 'other'] ?? 8;
     if (oa !== ob) return oa - ob;
     return a.item.localeCompare(b.item);
   });
-
   rows.forEach((row, i) => {
     row.sortOrder = i;
   });
@@ -253,33 +210,51 @@ export function buildListFromRecipes(
   return rows;
 }
 
+// ── DB-backed builder ──────────────────────────────────────────────────────────
+
+/**
+ * Build a consolidated grocery list from one or more of the user's recipe IDs.
+ * (Caller is responsible for verifying recipe ownership.)
+ */
+export async function buildListFromRecipes(
+  userId: string,
+  recipeIds: string[],
+  subtractPantry: boolean,
+): Promise<Omit<DbGroceryListItem, 'id' | 'listId'>[]> {
+  const allIngredients: SourcedIngredient[] = [];
+  for (const recipeId of recipeIds) {
+    const rows = await db
+      .select({ item: ingredientsTable.item, quantity: ingredientsTable.quantity })
+      .from(ingredientsTable)
+      .where(eq(ingredientsTable.recipeId, recipeId))
+      .orderBy(asc(ingredientsTable.sortOrder));
+    for (const row of rows) allIngredients.push({ item: row.item, quantity: row.quantity, sourceRecipeId: recipeId });
+  }
+
+  const pantryItems: PantryLike[] = subtractPantry
+    ? await db
+        .select({ item: pantryTable.item, quantity: pantryTable.quantity, unit: pantryTable.unit, isStaple: pantryTable.isStaple })
+        .from(pantryTable)
+        .where(eq(pantryTable.userId, userId))
+    : [];
+
+  return consolidate(allIngredients, pantryItems, subtractPantry);
+}
+
 // ── Share text ────────────────────────────────────────────────────────────────
 
 const AISLE_EMOJI: Record<string, string> = {
-  produce: '🥬',
-  dairy: '🧀',
-  bakery: '🥖',
-  meat: '🥩',
-  frozen: '🧊',
-  spices: '🌶️',
-  pantry: '🥫',
-  beverages: '🥤',
-  other: '🛒',
+  produce: '🥬', dairy: '🧀', bakery: '🥖', meat: '🥩', frozen: '🧊', spices: '🌶️', pantry: '🥫', beverages: '🥤', other: '🛒',
 };
 
-/**
- * Generate a shareable plain-text version of a grocery list grouped by aisle.
- */
+/** Generate a shareable plain-text version of a grocery list grouped by aisle. */
 export function generateShareText(
   listName: string,
   items: Pick<DbGroceryListItem, 'item' | 'quantity' | 'aisle' | 'isChecked'>[],
-  recipeCount: number
+  recipeCount: number,
 ): string {
-  const unchecked = items.filter((i) => i.isChecked === 0);
-  const lines: string[] = [
-    `🛒 ${listName} (${recipeCount} recipe${recipeCount !== 1 ? 's' : ''})`,
-    '',
-  ];
+  const unchecked = items.filter((i) => !i.isChecked);
+  const lines: string[] = [`🛒 ${listName} (${recipeCount} recipe${recipeCount !== 1 ? 's' : ''})`, ''];
 
   const byAisle = new Map<string, typeof unchecked>();
   for (const item of unchecked) {

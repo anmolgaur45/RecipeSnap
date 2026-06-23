@@ -19,6 +19,7 @@ export interface VideoMetadata {
 export interface DownloadResult {
   videoPath: string;
   audioPath: string;
+  thumbnailPath: string | null;
   metadata: VideoMetadata;
   tempDir: string;
 }
@@ -71,10 +72,46 @@ export async function downloadVideo(url: string): Promise<DownloadResult> {
     thumbnailUrl: meta.thumbnail,
   };
 
-  // Extract audio from the already-downloaded video — no second network round-trip.
-  await extractAudioFromVideo(videoPath, audioPath);
+  const thumbnailPath = path.join(tempDir, 'thumbnail.jpg');
 
-  return { videoPath, audioPath, metadata, tempDir };
+  // Extract audio and a keyframe thumbnail in parallel — no extra network requests.
+  const [, thumbResult] = await Promise.allSettled([
+    extractAudioFromVideo(videoPath, audioPath),
+    extractKeyframeThumbnail(videoPath, thumbnailPath),
+  ]);
+
+  return {
+    videoPath,
+    audioPath,
+    thumbnailPath: thumbResult.status === 'fulfilled' ? thumbnailPath : null,
+    metadata,
+    tempDir,
+  };
+}
+
+/**
+ * Extracts a single keyframe at t=1s as a JPEG thumbnail.
+ * Falls back to t=0 if the video is shorter than 1s.
+ */
+function extractKeyframeThumbnail(videoPath: string, thumbnailPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    ffmpeg(videoPath)
+      .seekInput(1)
+      .frames(1)
+      .output(thumbnailPath)
+      .on('end', () => resolve())
+      .on('error', () => {
+        // Retry at t=0 (very short clips)
+        ffmpeg(videoPath)
+          .seekInput(0)
+          .frames(1)
+          .output(thumbnailPath)
+          .on('end', () => resolve())
+          .on('error', (err) => reject(new Error(`Thumbnail extraction failed: ${err.message}`)))
+          .run();
+      })
+      .run();
+  });
 }
 
 /** Uses ffmpeg to strip audio from an existing video file into an mp3. */

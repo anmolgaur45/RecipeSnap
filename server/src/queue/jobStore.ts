@@ -12,6 +12,7 @@ export interface JobProgress {
 export interface Job {
   id: string;
   url: string;
+  userId: string;
   status: JobStatus;
   progress: JobProgress[];
   result?: ExtractionResult;
@@ -26,10 +27,11 @@ let activeJobs = 0;
 const waitQueue: Array<() => void> = [];
 
 /** Create a new queued job and register it in the store. */
-export function createJob(url: string): Job {
+export function createJob(url: string, userId: string): Job {
   const job: Job = {
     id: uuid(),
     url,
+    userId,
     status: 'queued',
     progress: [],
     createdAt: Date.now(),
