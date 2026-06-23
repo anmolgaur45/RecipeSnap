@@ -104,6 +104,10 @@ export interface Recipe {
   // Adaptation provenance (set when this recipe was AI-adapted from another)
   adaptedFrom?: string | null;
   adaptationType?: string | null;
+  // Video thumbnail URL (from yt-dlp metadata or TheMealDB)
+  thumbnailUrl?: string | null;
+  // Most recent cook session rating (1-5), populated by GET /api/recipes
+  lastCookRating?: number | null;
 }
 
 // ── Pantry ────────────────────────────────────────────────────────────────────

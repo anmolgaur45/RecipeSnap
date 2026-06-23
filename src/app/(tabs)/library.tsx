@@ -11,7 +11,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useRecipeStore } from '@/store/recipeStore';
 import { RecipeCard } from '@/components/RecipeCard';
 import { RecipeCardSkeleton } from '@/components/RecipeCardSkeleton';
@@ -54,6 +54,8 @@ export default function LibraryScreen() {
   const [newColName, setNewColName] = useState('');
   const [creatingCol, setCreatingCol] = useState(false);
 
+  const searchInputRef = useRef<TextInput>(null);
+  const params = useLocalSearchParams<{ focus?: string }>();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -62,6 +64,14 @@ export default function LibraryScreen() {
       getCollections().then(setCollections).catch(() => {}),
     ]);
   }, []);
+
+  // Auto-focus search when navigated from home screen search bar
+  useEffect(() => {
+    if (params.focus === '1') {
+      const t = setTimeout(() => searchInputRef.current?.focus(), 150);
+      return () => clearTimeout(t);
+    }
+  }, [params.focus]);
 
   const runSearch = useCallback(
     async (q: string, filters: Map<string, string>, collId: number | null, s: 'recent' | 'alpha') => {
@@ -255,6 +265,7 @@ export default function LibraryScreen() {
         }}>
           <Text style={{ fontSize: 15, color: Colors.textMuted, marginRight: 8 }}>🔍</Text>
           <TextInput
+            ref={searchInputRef}
             style={{ flex: 1, paddingVertical: 11, fontSize: 14, color: Colors.textPrimary }}
             placeholder="Search recipes or ingredients..."
             placeholderTextColor={Colors.textMuted}

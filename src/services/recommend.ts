@@ -87,3 +87,40 @@ export async function getExpiringAlerts(): Promise<ExpiringAlert[]> {
   if (!res.ok) throw new Error('Failed to fetch expiring alerts');
   return res.json() as Promise<ExpiringAlert[]>;
 }
+
+export interface UserPreferences {
+  cookCount: number;
+  favoriteCuisines: string[];
+  recentlyCookedIds: string[];
+  preferredDifficulty: string | null;
+  avgRating: number | null;
+}
+
+export async function getUserPreferences(): Promise<UserPreferences> {
+  const res = await fetch(`${API_URL}/api/preferences`);
+  if (!res.ok) throw new Error('Failed to fetch preferences');
+  return res.json() as Promise<UserPreferences>;
+}
+
+export async function importRecipe(data: {
+  title: string;
+  description?: string;
+  cuisine?: string;
+  cookTime?: string;
+  prepTime?: string;
+  difficulty?: string;
+  servings?: number;
+  ingredients: Array<{ item: string; quantity: string }>;
+  steps: string[];
+  sourceUrl?: string;
+  tags?: string[];
+  thumbnailUrl?: string;
+}): Promise<{ id: string }> {
+  const res = await fetch(`${API_URL}/api/recipes/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to import recipe');
+  return res.json() as Promise<{ id: string }>;
+}
