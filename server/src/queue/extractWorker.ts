@@ -3,6 +3,7 @@ import { downloadVideo, cleanupDownload, type DownloadResult } from '../services
 import { fetchMetadataAndCaptions } from '../services/metadataFetcher';
 import { transcribeAudio } from '../services/transcriber';
 import { runOcrOnVideo } from '../services/ocrService';
+import { extractRecipeFromVideo } from '../services/visualExtractor';
 import { structureRecipe, toRecipeRecord, type RecipeOutput } from '../services/recipeStructurer';
 import { calculateNutrition } from '../services/nutritionCalculator';
 import { tagRecipe } from '../services/autoTagger';
@@ -121,24 +122,44 @@ export async function runExtractionJob(jobId: string): Promise<void> {
       if (transcriptResult.status === 'rejected') console.warn('[worker] Transcription failed:', transcriptResult.reason);
       if (ocrResult.status === 'rejected') console.warn('[worker] OCR failed:', ocrResult.reason);
 
-      await addProgress(job.id, 'structuring', 'Organising your recipe with AI...');
-      // A structuring failure here IS terminal (full pipeline is the last resort).
-      structured = await withTimeout(
-        structureRecipe({
-          caption: meta?.subtitleText ?? '',
-          subtitle: meta?.subtitleText ?? '',
-          transcript: transcript?.transcript ?? '',
-          ocrText: ocr?.mergedText ?? '',
-          videoTitle: meta?.title ?? dl.metadata.title,
-          videoDescription: meta?.description ?? dl.metadata.description,
-        }),
-        60_000,
-        'AI structuring timed out'
-      );
+      const textSources = {
+        caption: meta?.subtitleText ?? '',
+        subtitle: meta?.subtitleText ?? '',
+        transcript: transcript?.transcript ?? '',
+        ocrText: ocr?.mergedText ?? '',
+        videoTitle: meta?.title ?? dl.metadata.title,
+        videoDescription: meta?.description ?? dl.metadata.description,
+      };
+      const textLen = (
+        textSources.transcript + textSources.ocrText + textSources.subtitle + textSources.videoDescription
+      ).replace(/\s+/g, '').length;
 
-      if (meta?.subtitleText) sourcesUsed.push('captions');
-      if (transcript?.transcript) sourcesUsed.push('transcript');
-      if (ocr?.mergedText) sourcesUsed.push('ocr');
+      await addProgress(job.id, 'structuring', 'Organising your recipe with AI...');
+      if (textLen >= 40) {
+        try {
+          structured = await withTimeout(structureRecipe(textSources), 60_000, 'AI structuring timed out');
+          if (meta?.subtitleText) sourcesUsed.push('captions');
+          if (transcript?.transcript) sourcesUsed.push('transcript');
+          if (ocr?.mergedText) sourcesUsed.push('ocr');
+        } catch (e: unknown) {
+          // A real failure (e.g. Vertex down) is terminal; only "not a recipe"
+          // from the text gets a second look from the frames themselves.
+          if ((e as Error & { code?: string }).code !== 'not_a_recipe') throw e;
+          structured = await runVisualFallback(dl.videoPath, job.id);
+          if (!structured) throw e;
+          sourcesUsed.push('vision');
+        }
+      } else {
+        // No usable caption / narration / on-screen text: understand the frames.
+        structured = await runVisualFallback(dl.videoPath, job.id);
+        if (!structured) {
+          throw Object.assign(
+            new Error("This doesn't look like a recipe video. Try sharing a cooking video!"),
+            { code: 'not_a_recipe' },
+          );
+        }
+        sourcesUsed.push('vision');
+      }
     }
 
     const baseRecipe = toRecipeRecord(structured, resolvedUrl, platform);
@@ -229,6 +250,20 @@ function hasRecipeSignal(text: string): boolean {
  */
 function isStrongRecipe(r: RecipeOutput): boolean {
   return r.isRecipe && r.ingredients.length >= 3 && r.steps.length >= 2 && r.confidence !== 'low';
+}
+
+/**
+ * Last-resort visual understanding: have the model watch the downloaded video's
+ * frames. Non-fatal — returns null on failure so the caller decides terminality.
+ */
+async function runVisualFallback(videoPath: string, jobId: string): Promise<RecipeOutput | null> {
+  await addProgress(jobId, 'analyzing_video', 'Watching the video to read the recipe...');
+  return withTimeout(extractRecipeFromVideo(videoPath), 90_000, 'Visual analysis timed out').catch(
+    (err: unknown) => {
+      console.warn('[worker] visual extraction failed:', err);
+      return null;
+    },
+  );
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {

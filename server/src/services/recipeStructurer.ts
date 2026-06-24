@@ -18,7 +18,7 @@ const StepSchema = z.object({
   tip: z.string().nullable().default(null),
 });
 
-const RecipeOutputSchema = z.object({
+export const RecipeOutputSchema = z.object({
   // Whether the source is actually a cooking recipe. Native structured output
   // forces this object shape, so a separate "not a recipe" payload is no longer
   // possible — the model signals it here instead.
