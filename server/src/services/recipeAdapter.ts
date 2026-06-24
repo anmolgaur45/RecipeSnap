@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod';
-import { anthropicClient, openaiClient } from './aiClients';
+import { generateStructured } from './ai/generateStructured';
 
 // ── Adaptation types ──────────────────────────────────────────────────────────
 
@@ -93,31 +93,11 @@ RULES:
 - NEVER remove an ingredient without providing a substitute or explaining why it is omitted.
 - If the recipe already complies with the request (no changes needed), set alreadyCompliant to true and return the original recipe unchanged with an empty changedIngredients array.
 
-Return ONLY valid JSON matching this exact schema (no markdown, no extra text):
-{
-  "title": "string",
-  "description": "string",
-  "servings": "string or null",
-  "prepTime": "string or null",
-  "cookTime": "string or null",
-  "difficulty": "easy | medium | hard",
-  "cuisine": "string or null",
-  "ingredients": [
-    { "item": "string", "quantity": "string", "category": "produce|dairy|protein|spices|pantry|other", "isOptional": boolean }
-  ],
-  "steps": [
-    { "stepNumber": number, "instruction": "string", "duration": "string or null", "tip": "string or null" }
-  ],
-  "tags": ["string"],
-  "notes": "string or null",
-  "adaptationNotes": "string — brief summary of all changes made",
-  "changedIngredients": [
-    { "original": "string — original ingredient name + quantity", "replacement": "string — new ingredient name + quantity", "reason": "string — why this substitution works" }
-  ],
-  "confidenceScore": "high | medium | low",
-  "flavorImpactNote": "string or null",
-  "alreadyCompliant": boolean
-}`;
+Field notes:
+- adaptationNotes: brief summary of all changes made.
+- changedIngredients: for each substitution, the original (name + quantity), the replacement (name + quantity), and why it works.
+- confidenceScore: your confidence in the adaptation.
+- flavorImpactNote: a short note only if the substitutions notably change the dish, otherwise null.`;
 
 const ADAPTATION_PROMPTS: Record<Exclude<AdaptationType, 'custom'>, string> = {
   vegan: 'Make this recipe fully vegan. Replace all animal products (meat, fish, dairy, eggs, honey) with plant-based alternatives.',
@@ -175,62 +155,6 @@ function buildUserMessage(recipe: RecipeInput, type: AdaptationType, customPromp
   return `ADAPTATION REQUEST: ${adaptationRequest}\n\nORIGINAL RECIPE:\n${recipeJson}`;
 }
 
-// ── AI calls ──────────────────────────────────────────────────────────────────
-
-async function adaptWithClaude(userMessage: string): Promise<AdaptationOutput> {
-  const anthropic = anthropicClient();
-
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userMessage }],
-  });
-
-  const text = response.content
-    .filter((b) => b.type === 'text')
-    .map((b) => (b as { type: 'text'; text: string }).text)
-    .join('');
-
-  return parseAndValidate(text);
-}
-
-async function adaptWithGemini(userMessage: string): Promise<AdaptationOutput> {
-  const client = openaiClient({
-    apiKey: process.env.GOOGLE_GENERATIVE_AI_KEY,
-    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-  });
-
-  const response = await client.chat.completions.create({
-    model: 'gemini-1.5-flash',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userMessage },
-    ],
-    max_tokens: 4096,
-  });
-
-  const text = response.choices[0]?.message?.content ?? '';
-  return parseAndValidate(text);
-}
-
-function parseAndValidate(rawText: string): AdaptationOutput {
-  const jsonMatch =
-    rawText.match(/```(?:json)?\s*([\s\S]+?)\s*```/) ??
-    rawText.match(/(\{[\s\S]+\})/);
-
-  if (!jsonMatch) {
-    throw new Error('No JSON found in AI adaptation response');
-  }
-
-  const parsed = JSON.parse(jsonMatch[1]) as unknown;
-  const result = AdaptationOutputSchema.safeParse(parsed);
-  if (!result.success) {
-    throw new Error(`Invalid adaptation schema: ${result.error.message}`);
-  }
-  return result.data;
-}
-
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function adaptRecipe(
@@ -238,19 +162,11 @@ export async function adaptRecipe(
   type: AdaptationType,
   customPrompt?: string,
 ): Promise<AdaptationOutput> {
-  const userMessage = buildUserMessage(recipe, type, customPrompt);
-
-  if (process.env.ANTHROPIC_API_KEY) {
-    try {
-      return await adaptWithClaude(userMessage);
-    } catch (err) {
-      console.warn('[recipeAdapter] Claude failed, trying Gemini:', err);
-    }
-  }
-
-  if (process.env.GOOGLE_GENERATIVE_AI_KEY) {
-    return adaptWithGemini(userMessage);
-  }
-
-  throw new Error('No AI providers available. Set ANTHROPIC_API_KEY or GOOGLE_GENERATIVE_AI_KEY.');
+  return generateStructured({
+    schema: AdaptationOutputSchema,
+    schemaName: 'adapted_recipe',
+    schemaDescription: 'A recipe adapted to a dietary requirement, with a diff of the changes.',
+    system: SYSTEM_PROMPT,
+    user: buildUserMessage(recipe, type, customPrompt),
+  });
 }

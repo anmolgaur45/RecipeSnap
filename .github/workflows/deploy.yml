@@ -55,7 +55,7 @@ jobs:
             --memory 2Gi --cpu 2 --timeout 1800 --concurrency 1 \
             --max-instances 2 \
             --set-secrets "$SECRETS" \
-            --set-env-vars "NODE_ENV=production,SUPABASE_STORAGE_BUCKET=${{ vars.SUPABASE_STORAGE_BUCKET }},WORKER_INVOKER_SA=${{ vars.WORKER_INVOKER_SA }}" \
+            --set-env-vars "NODE_ENV=production,SUPABASE_STORAGE_BUCKET=${{ vars.SUPABASE_STORAGE_BUCKET }},WORKER_INVOKER_SA=${{ vars.WORKER_INVOKER_SA }},GCP_PROJECT=${{ vars.GCP_PROJECT }},VERTEX_LOCATION=global" \
             --quiet
 
       - name: resolve worker url
@@ -74,5 +74,5 @@ jobs:
             --allow-unauthenticated \
             --memory 512Mi --cpu 1 --timeout 60 --max-instances 3 \
             --set-secrets "$SECRETS" \
-            --set-env-vars "NODE_ENV=production,SUPABASE_STORAGE_BUCKET=${{ vars.SUPABASE_STORAGE_BUCKET }},CORS_ORIGIN=${{ vars.CORS_ORIGIN }},GCP_PROJECT=${{ vars.GCP_PROJECT }},GCP_LOCATION=${{ vars.GCP_REGION }},CLOUD_TASKS_QUEUE=${{ vars.CLOUD_TASKS_QUEUE }},WORKER_INVOKER_SA=${{ vars.WORKER_INVOKER_SA }},WORKER_URL=${WORKER_URL}" \
+            --set-env-vars "NODE_ENV=production,SUPABASE_STORAGE_BUCKET=${{ vars.SUPABASE_STORAGE_BUCKET }},CORS_ORIGIN=${{ vars.CORS_ORIGIN }},GCP_PROJECT=${{ vars.GCP_PROJECT }},GCP_LOCATION=${{ vars.GCP_REGION }},VERTEX_LOCATION=global,CLOUD_TASKS_QUEUE=${{ vars.CLOUD_TASKS_QUEUE }},WORKER_INVOKER_SA=${{ vars.WORKER_INVOKER_SA }},WORKER_URL=${WORKER_URL}" \
             --quiet
