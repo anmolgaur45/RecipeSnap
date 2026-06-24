@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { getVertexAI } from './vertex';
 import { anthropicClient } from '../aiClients';
+import { recordUsage } from './usage';
 
 // Single entry point for "give me JSON shaped like this zod schema". Replaces the
 // old prompt-for-JSON-then-regex-parse pattern with native structured output:
@@ -143,6 +144,12 @@ async function geminiJson(
   params: Parameters<ReturnType<typeof getVertexAI>['models']['generateContent']>[0],
 ): Promise<unknown> {
   const res = await getVertexAI().models.generateContent(params);
+  recordUsage({
+    provider: 'gemini',
+    model: params.model,
+    inputTokens: res.usageMetadata?.promptTokenCount,
+    outputTokens: res.usageMetadata?.candidatesTokenCount,
+  });
   const text = res.text;
   if (!text || !text.trim()) {
     throw new Error('Gemini returned an empty response');
@@ -168,6 +175,13 @@ async function claudeJson<S extends z.ZodTypeAny>(
     ],
     tool_choice: { type: 'tool', name: req.schemaName },
     messages: [{ role: 'user', content }],
+  });
+
+  recordUsage({
+    provider: 'claude',
+    model: claudeModel(),
+    inputTokens: res.usage.input_tokens,
+    outputTokens: res.usage.output_tokens,
   });
 
   const toolUse = res.content.find((b) => b.type === 'tool_use');

@@ -11,7 +11,8 @@ import { persistThumbnail, persistThumbnailFromUrl } from '../services/thumbnail
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { recipes, ingredients, steps } from '../db/schema.pg';
-import { getJob, updateJob, addProgress, acquireSlot, releaseSlot } from './jobStore';
+import { getJob, updateJob, addProgress, acquireSlot, releaseSlot, saveJobUsage, type Job } from './jobStore';
+import { withUsageTracking, summarizeUsage, recordUsage } from '../services/ai/usage';
 import type { ExtractionResult } from '../routes/extract';
 
 /**
@@ -32,7 +33,21 @@ export async function runExtractionJob(jobId: string): Promise<void> {
   await acquireSlot();
   await updateJob(job.id, { status: 'processing' });
 
+  try {
+    // Collect model usage across the whole pipeline, then persist it on the job.
+    const { result: mode, events } = await withUsageTracking(() => runPipeline(job));
+    await saveJobUsage(job.id, mode, summarizeUsage(events)).catch((e: unknown) =>
+      console.warn('[worker] usage persist failed (non-fatal):', e),
+    );
+  } finally {
+    releaseSlot();
+  }
+}
+
+/** Runs the extraction pipeline for one job and returns the path taken (for metering). */
+async function runPipeline(job: Job): Promise<string> {
   let tempDir: string | null = null;
+  let mode = 'unknown';
   const startMs = Date.now();
 
   try {
@@ -81,6 +96,7 @@ export async function runExtractionJob(jobId: string): Promise<void> {
         );
         if (isStrongRecipe(r)) {
           structured = r;
+          mode = 'caption_first';
           sourcesUsed.push('captions');
         }
       } catch (e: unknown) {
@@ -122,6 +138,10 @@ export async function runExtractionJob(jobId: string): Promise<void> {
       if (transcriptResult.status === 'rejected') console.warn('[worker] Transcription failed:', transcriptResult.reason);
       if (ocrResult.status === 'rejected') console.warn('[worker] OCR failed:', ocrResult.reason);
 
+      if (transcript?.transcript && dl.metadata.duration) {
+        recordUsage({ provider: 'whisper', model: 'whisper-1', audioSeconds: Math.round(dl.metadata.duration) });
+      }
+
       const textSources = {
         caption: meta?.subtitleText ?? '',
         subtitle: meta?.subtitleText ?? '',
@@ -138,6 +158,7 @@ export async function runExtractionJob(jobId: string): Promise<void> {
       if (textLen >= 40) {
         try {
           structured = await withTimeout(structureRecipe(textSources), 60_000, 'AI structuring timed out');
+          mode = 'full_pipeline';
           if (meta?.subtitleText) sourcesUsed.push('captions');
           if (transcript?.transcript) sourcesUsed.push('transcript');
           if (ocr?.mergedText) sourcesUsed.push('ocr');
@@ -147,6 +168,7 @@ export async function runExtractionJob(jobId: string): Promise<void> {
           if ((e as Error & { code?: string }).code !== 'not_a_recipe') throw e;
           structured = await runVisualFallback(dl.videoPath, job.id);
           if (!structured) throw e;
+          mode = 'visual';
           sourcesUsed.push('vision');
         }
       } else {
@@ -158,6 +180,7 @@ export async function runExtractionJob(jobId: string): Promise<void> {
             { code: 'not_a_recipe' },
           );
         }
+        mode = 'visual';
         sourcesUsed.push('vision');
       }
     }
@@ -214,6 +237,7 @@ export async function runExtractionJob(jobId: string): Promise<void> {
 
     await updateJob(job.id, { status: 'done', result });
     await addProgress(job.id, 'complete', 'Recipe extracted!');
+    return mode;
   } catch (err) {
     const message = (err as Error & { code?: string }).code === 'not_a_recipe'
       ? "This doesn't look like a recipe video. Try sharing a cooking video!"
@@ -223,9 +247,9 @@ export async function runExtractionJob(jobId: string): Promise<void> {
 
     await updateJob(job.id, { status: 'error', error: message });
     await addProgress(job.id, 'error', message);
+    return mode;
   } finally {
     if (tempDir) cleanupDownload(tempDir);
-    releaseSlot();
   }
 }
 

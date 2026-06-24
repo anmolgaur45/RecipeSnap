@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { extractionJobs, type DbExtractionJob } from '../db/schema.pg';
 import type { ExtractionResult } from '../routes/extract';
+import type { UsageTotals } from '../services/ai/usage';
 
 export type JobStatus = 'queued' | 'processing' | 'done' | 'error';
 
@@ -63,6 +64,23 @@ export async function updateJob(
       ...(partial.status !== undefined ? { status: partial.status } : {}),
       ...(partial.result !== undefined ? { result: partial.result } : {}),
       ...(partial.error !== undefined ? { error: partial.error } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(extractionJobs.id, id));
+}
+
+/** Persist per-extraction cost metering (Phase 4d) onto the job row. */
+export async function saveJobUsage(id: string, mode: string, totals: UsageTotals): Promise<void> {
+  await db
+    .update(extractionJobs)
+    .set({
+      mode,
+      geminiInputTokens: totals.geminiInputTokens,
+      geminiOutputTokens: totals.geminiOutputTokens,
+      claudeInputTokens: totals.claudeInputTokens,
+      claudeOutputTokens: totals.claudeOutputTokens,
+      whisperSeconds: totals.whisperSeconds,
+      estimatedCostUsd: totals.estimatedCostUsd,
       updatedAt: new Date(),
     })
     .where(eq(extractionJobs.id, id));

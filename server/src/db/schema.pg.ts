@@ -308,6 +308,15 @@ export const extractionJobs = pgTable(
     progress: jsonb('progress').$type<JobProgress[]>().notNull().default([]),
     result: jsonb('result').$type<ExtractionResult>(),
     error: text('error'),
+    // Per-extraction cost metering (Phase 4d). Which path ran + model usage, so
+    // we can see real cost per job and enforce freemium quotas later.
+    mode: text('mode'), // caption_first | full_pipeline | visual
+    geminiInputTokens: integer('gemini_input_tokens'),
+    geminiOutputTokens: integer('gemini_output_tokens'),
+    claudeInputTokens: integer('claude_input_tokens'),
+    claudeOutputTokens: integer('claude_output_tokens'),
+    whisperSeconds: integer('whisper_seconds'),
+    estimatedCostUsd: doublePrecision('estimated_cost_usd'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },

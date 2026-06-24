@@ -1,6 +1,7 @@
 import { anthropicClient } from './aiClients';
 import fs from 'fs';
 import { extractKeyframes, cleanupKeyframes } from '../utils/keyframeExtractor';
+import { recordUsage } from './ai/usage';
 
 export interface OcrResult {
   ocrTexts: string[];
@@ -48,6 +49,13 @@ export async function runOcrOnVideo(videoPath: string): Promise<OcrResult> {
               ],
             },
           ],
+        });
+
+        recordUsage({
+          provider: 'claude',
+          model: 'claude-haiku-4-5-20251001',
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
         });
 
         const text = response.content[0]?.type === 'text'

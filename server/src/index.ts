@@ -14,6 +14,7 @@ import { recommendRouter } from './routes/recommend';
 import { cookRouter } from './routes/cook';
 import { preferencesRouter } from './routes/preferences';
 import { importRecipeRouter } from './routes/importRecipe';
+import { usageRouter } from './routes/usage';
 import { workerRouter } from './routes/worker';
 
 const app = express();
@@ -44,6 +45,7 @@ app.use('/api/tags', tagsRouter);
 app.use('/api/meal-plans', mealPlanRouter);
 app.use('/api/recommendations', recommendRouter);
 app.use('/api/cook', cookRouter);
+app.use('/api/usage', usageRouter);
 app.use('/api', preferencesRouter);
 app.use('/api', importRecipeRouter);
 
