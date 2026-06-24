@@ -53,3 +53,34 @@ export async function persistThumbnail(localPath: string, recipeId: string): Pro
     return null; // non-fatal
   }
 }
+
+/**
+ * Persists a thumbnail from a remote URL (the caption-first path has no local
+ * keyframe, only the platform thumbnail URL from metadata). Fetches the bytes
+ * once and stores them so the recipe card does not depend on a CDN URL that may
+ * expire. Returns the stored URL, or null on any failure (recipe still saves).
+ */
+export async function persistThumbnailFromUrl(url: string, recipeId: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return null;
+    const bytes = Buffer.from(await res.arrayBuffer());
+
+    const supabase = await getStorageClient();
+    const objectPath = `${recipeId}.jpg`;
+
+    if (supabase) {
+      const { error } = await supabase.storage
+        .from(BUCKET)
+        .upload(objectPath, bytes, { contentType: 'image/jpeg', upsert: true });
+      if (error) throw error;
+      return supabase.storage.from(BUCKET).getPublicUrl(objectPath).data.publicUrl;
+    }
+
+    fs.mkdirSync(THUMBNAILS_DIR, { recursive: true });
+    fs.writeFileSync(path.join(THUMBNAILS_DIR, objectPath), bytes);
+    return `/thumbnails/${objectPath}`;
+  } catch {
+    return null; // non-fatal
+  }
+}

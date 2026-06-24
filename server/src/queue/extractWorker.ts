@@ -1,12 +1,12 @@
 import { resolveUrl } from '../services/platformResolver';
-import { downloadVideo, cleanupDownload } from '../services/videoDownloader';
-import { fetchCaptions } from '../services/captionFetcher';
+import { downloadVideo, cleanupDownload, type DownloadResult } from '../services/videoDownloader';
+import { fetchMetadataAndCaptions } from '../services/metadataFetcher';
 import { transcribeAudio } from '../services/transcriber';
 import { runOcrOnVideo } from '../services/ocrService';
-import { structureRecipe, toRecipeRecord } from '../services/recipeStructurer';
+import { structureRecipe, toRecipeRecord, type RecipeOutput } from '../services/recipeStructurer';
 import { calculateNutrition } from '../services/nutritionCalculator';
 import { tagRecipe } from '../services/autoTagger';
-import { persistThumbnail } from '../services/thumbnailStore';
+import { persistThumbnail, persistThumbnailFromUrl } from '../services/thumbnailStore';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { recipes, ingredients, steps } from '../db/schema.pg';
@@ -14,9 +14,15 @@ import { getJob, updateJob, addProgress, acquireSlot, releaseSlot } from './jobS
 import type { ExtractionResult } from '../routes/extract';
 
 /**
- * Runs the full extraction pipeline for a persisted job. Loads the job by id so
- * the same entry point serves both the Cloud Tasks worker request and the dev
- * inline path. Updates job state in Postgres as it progresses.
+ * Caption-first extraction pipeline.
+ *
+ * Stage 1: fetch metadata + captions without downloading the video and try to
+ * structure a recipe from that text alone. Instagram/TikTok usually carry the
+ * full recipe in the caption, so this is the cheap, reliable, bot-block-free
+ * path for the common case.
+ *
+ * Stage 2 (fallback): only when captions are missing or insufficient do we
+ * download the video and run Whisper + OCR, then structure on every source.
  */
 export async function runExtractionJob(jobId: string): Promise<void> {
   const job = await getJob(jobId);
@@ -29,7 +35,7 @@ export async function runExtractionJob(jobId: string): Promise<void> {
   const startMs = Date.now();
 
   try {
-    // Step 1: Resolve URL
+    // Stage 1a: resolve URL
     await addProgress(job.id, 'resolving', 'Resolving video URL...');
     const { platform, resolvedUrl } = await withTimeout(
       resolveUrl(job.url),
@@ -41,76 +47,111 @@ export async function runExtractionJob(jobId: string): Promise<void> {
       throw Object.assign(new Error('Unsupported platform. Please use Instagram, TikTok, or YouTube.'), { code: 'unsupported_platform' });
     }
 
-    // Step 2: Download video + fetch captions in parallel
-    await addProgress(job.id, 'downloading', 'Downloading video...');
-    const [downloadSettled, captionEarlySettled] = await Promise.allSettled([
-      withTimeout(downloadVideo(resolvedUrl), 90_000, 'Video download timed out'),
-      withTimeout(fetchCaptions(resolvedUrl, ''), 20_000, 'Caption fetch timed out'),
-    ]);
+    // Stage 1b: metadata + captions, no video bytes
+    await addProgress(job.id, 'reading_captions', 'Reading captions...');
+    const meta = await withTimeout(
+      fetchMetadataAndCaptions(resolvedUrl),
+      30_000,
+      'Metadata fetch timed out'
+    ).catch((e: unknown) => {
+      console.warn('[worker] metadata/caption fetch failed:', e);
+      return null;
+    });
 
-    if (downloadSettled.status === 'rejected') throw downloadSettled.reason as Error;
-    const download = downloadSettled.value;
-    tempDir = download.tempDir;
+    let structured: RecipeOutput | null = null;
+    let download: DownloadResult | null = null;
+    const sourcesUsed: string[] = [];
 
-    // Step 3: Parallel extraction
-    await addProgress(job.id, 'extracting_audio', 'Extracting audio and captions...');
+    // Stage 1c: caption-first structuring when the text looks recipe-like
+    if (meta && hasRecipeSignal(`${meta.title}\n${meta.description}\n${meta.subtitleText}`)) {
+      await addProgress(job.id, 'structuring', 'Organising your recipe with AI...');
+      try {
+        const r = await withTimeout(
+          structureRecipe({
+            caption: meta.description,
+            subtitle: meta.subtitleText,
+            transcript: '',
+            ocrText: '',
+            videoTitle: meta.title,
+            videoDescription: meta.description,
+          }),
+          60_000,
+          'AI structuring timed out'
+        );
+        if (isStrongRecipe(r)) {
+          structured = r;
+          sourcesUsed.push('captions');
+        }
+      } catch (e: unknown) {
+        // not_a_recipe or a transient failure here is NOT terminal — captions
+        // alone may be sparse on a real recipe video. Fall back to Stage 2.
+        console.warn('[worker] caption-first insufficient, falling back to full pipeline:', e);
+      }
+    }
 
-    const [captionResult, transcriptResult, ocrResult] = await Promise.allSettled([
-      captionEarlySettled.status === 'fulfilled'
-        ? Promise.resolve(captionEarlySettled.value)
-        : withTimeout(
-            fetchCaptions(resolvedUrl, download.metadata.description),
-            20_000,
-            'Caption fetch timed out'
-          ),
-      withTimeout(
-        (async () => {
-          await addProgress(job.id, 'transcribing', 'Transcribing voiceover...');
-          return transcribeAudio(download.audioPath);
-        })(),
-        90_000,
-        'Transcription timed out'
-      ),
-      withTimeout(
-        (async () => {
-          await addProgress(job.id, 'running_ocr', 'Reading on-screen text...');
-          return runOcrOnVideo(download.videoPath);
-        })(),
+    // Stage 2 (fallback): download + transcribe + OCR, then structure on everything
+    if (!structured) {
+      await addProgress(job.id, 'downloading', 'Downloading video...');
+      const dl = await withTimeout(downloadVideo(resolvedUrl), 90_000, 'Video download timed out');
+      download = dl;
+      tempDir = dl.tempDir;
+
+      await addProgress(job.id, 'extracting_audio', 'Extracting audio and reading the video...');
+      const [transcriptResult, ocrResult] = await Promise.allSettled([
+        withTimeout(
+          (async () => {
+            await addProgress(job.id, 'transcribing', 'Transcribing voiceover...');
+            return transcribeAudio(dl.audioPath);
+          })(),
+          90_000,
+          'Transcription timed out'
+        ),
+        withTimeout(
+          (async () => {
+            await addProgress(job.id, 'running_ocr', 'Reading on-screen text...');
+            return runOcrOnVideo(dl.videoPath);
+          })(),
+          60_000,
+          'OCR timed out'
+        ),
+      ]);
+
+      const transcript = transcriptResult.status === 'fulfilled' ? transcriptResult.value : null;
+      const ocr = ocrResult.status === 'fulfilled' ? ocrResult.value : null;
+      if (transcriptResult.status === 'rejected') console.warn('[worker] Transcription failed:', transcriptResult.reason);
+      if (ocrResult.status === 'rejected') console.warn('[worker] OCR failed:', ocrResult.reason);
+
+      await addProgress(job.id, 'structuring', 'Organising your recipe with AI...');
+      // A structuring failure here IS terminal (full pipeline is the last resort).
+      structured = await withTimeout(
+        structureRecipe({
+          caption: meta?.subtitleText ?? '',
+          subtitle: meta?.subtitleText ?? '',
+          transcript: transcript?.transcript ?? '',
+          ocrText: ocr?.mergedText ?? '',
+          videoTitle: meta?.title ?? dl.metadata.title,
+          videoDescription: meta?.description ?? dl.metadata.description,
+        }),
         60_000,
-        'OCR timed out'
-      ),
-    ]);
+        'AI structuring timed out'
+      );
 
-    const caption = captionResult.status === 'fulfilled' ? captionResult.value : null;
-    const transcript = transcriptResult.status === 'fulfilled' ? transcriptResult.value : null;
-    const ocr = ocrResult.status === 'fulfilled' ? ocrResult.value : null;
-
-    if (captionResult.status === 'rejected') console.warn('[worker] Caption fetch failed:', captionResult.reason);
-    if (transcriptResult.status === 'rejected') console.warn('[worker] Transcription failed:', transcriptResult.reason);
-    if (ocrResult.status === 'rejected') console.warn('[worker] OCR failed:', ocrResult.reason);
-
-    // Step 4: Structure recipe with AI
-    await addProgress(job.id, 'structuring', 'Organising your recipe with AI...');
-
-    const structured = await withTimeout(
-      structureRecipe({
-        caption: caption?.captionText ?? '',
-        subtitle: caption?.subtitleText ?? '',
-        transcript: transcript?.transcript ?? '',
-        ocrText: ocr?.mergedText ?? '',
-        videoTitle: download.metadata.title,
-        videoDescription: download.metadata.description,
-      }),
-      60_000,
-      'AI structuring timed out'
-    );
+      if (meta?.subtitleText) sourcesUsed.push('captions');
+      if (transcript?.transcript) sourcesUsed.push('transcript');
+      if (ocr?.mergedText) sourcesUsed.push('ocr');
+    }
 
     const baseRecipe = toRecipeRecord(structured, resolvedUrl, platform);
 
-    // Persist the keyframe thumbnail so it survives temp-dir cleanup
-    const thumbnailUrl = download.thumbnailPath
-      ? await persistThumbnail(download.thumbnailPath, baseRecipe.id)
-      : null;
+    // Thumbnail: a downloaded keyframe (Stage 2) is preferred; otherwise persist
+    // the platform thumbnail URL from metadata (caption-first path).
+    let thumbnailUrl: string | null = null;
+    if (download?.thumbnailPath) {
+      thumbnailUrl = await persistThumbnail(download.thumbnailPath, baseRecipe.id);
+    }
+    if (!thumbnailUrl && meta?.thumbnailUrl) {
+      thumbnailUrl = await persistThumbnailFromUrl(meta.thumbnailUrl, baseRecipe.id);
+    }
 
     const recipe = { ...baseRecipe, thumbnailUrl };
     await saveRecipeToDb(recipe, job.userId);
@@ -146,11 +187,7 @@ export async function runExtractionJob(jobId: string): Promise<void> {
       recipe,
       processingMeta: {
         durationMs: Date.now() - startMs,
-        sourcesUsed: [
-          caption?.captionText ? 'captions' : null,
-          transcript?.transcript ? 'transcript' : null,
-          ocr?.mergedText ? 'ocr' : null,
-        ].filter((s): s is string => s !== null),
+        sourcesUsed,
       },
     };
 
@@ -169,6 +206,29 @@ export async function runExtractionJob(jobId: string): Promise<void> {
     if (tempDir) cleanupDownload(tempDir);
     releaseSlot();
   }
+}
+
+/**
+ * Cheap pre-filter: does this text look like it might contain a recipe? Gates the
+ * caption-first AI call so we don't spend a model call on an empty/irrelevant
+ * caption (e.g. a YouTube title only). Requires some length plus a couple of
+ * measurement and cooking-verb signals.
+ */
+function hasRecipeSignal(text: string): boolean {
+  if (text.trim().length < 120) return false;
+  const t = text.toLowerCase();
+  const unitHits = (t.match(/\b(cups?|tbsp|tsp|tablespoons?|teaspoons?|grams?|kg|ml|oz|ounces?|pounds?|lbs?|cloves?|pinch|slices?|handful)\b/g) ?? []).length;
+  const verbHits = (t.match(/\b(mix|stir|add|bake|fry|boil|simmer|chop|saut[ée]|whisk|blend|grill|roast|knead|marinate|season|preheat|cook|combine|pour|heat|drizzle|garnish)\b/g) ?? []).length;
+  return unitHits >= 2 && verbHits >= 2;
+}
+
+/**
+ * Is a caption-first result strong enough to skip the full pipeline? Requires a
+ * real recipe with enough substance and non-low confidence; otherwise we fall
+ * back to download + transcription + OCR for a richer extraction.
+ */
+function isStrongRecipe(r: RecipeOutput): boolean {
+  return r.isRecipe && r.ingredients.length >= 3 && r.steps.length >= 2 && r.confidence !== 'low';
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
