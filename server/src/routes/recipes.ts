@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type RequestHandler } from 'express';
 import { and, asc, desc, eq, exists, ilike, isNotNull, or, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '../db/client';
 import {
   recipes,
@@ -12,8 +13,9 @@ import {
   type DbRecipe,
 } from '../db/schema.pg';
 import { requireAuth } from '../middleware/auth';
+import { validateBody } from '../middleware/validate';
 import { scaleIngredients } from '../services/servingScaler';
-import { adaptRecipe, isAdaptationType, ADAPTATION_LABELS } from '../services/recipeAdapter';
+import { adaptRecipe, ADAPTATION_LABELS } from '../services/recipeAdapter';
 import { substituteIngredient } from '../services/ingredientSubstituter';
 import { parseIngredient, classifyAisle } from '../utils/ingredientParser';
 import { calculateNutrition } from '../services/nutritionCalculator';
@@ -38,6 +40,26 @@ const clientIp = (req: Request) =>
   (req.ip ?? req.socket.remoteAddress ?? 'unknown').replace(/^::ffff:/, '');
 
 export const recipesRouter = Router();
+
+const SaveRecipeSchema = z.object({
+  title: z.string().trim().min(1, 'title is required'),
+  description: z.string().optional(),
+  cuisine: z.string().optional(),
+  cookTime: z.string().optional(),
+  difficulty: z.string().optional(),
+  ingredients: z.array(z.object({ item: z.string(), quantity: z.string() })).min(1, 'ingredients array is required'),
+  steps: z.array(z.string()).min(1, 'steps array is required'),
+});
+const ScaleSchema = z.object({ targetServings: z.coerce.number().min(1).max(50) });
+const ServingsSchema = z.object({ servings: z.coerce.number().min(1).max(50) });
+const AdaptSchema = z.object({
+  type: z.enum(['vegan', 'vegetarian', 'gluten-free', 'dairy-free', 'keto', 'halal', 'nut-free', 'custom']),
+  customPrompt: z.string().optional(),
+});
+const SubstituteSchema = z.object({
+  ingredientId: z.string().uuid(),
+  reason: z.enum(['dietary', 'unavailable', 'allergy', 'budget']).default('dietary'),
+});
 
 const ah =
   (fn: (req: Request, res: Response) => Promise<void>): RequestHandler =>
@@ -93,31 +115,11 @@ async function ownedRecipe(id: string, userId: string): Promise<DbRecipe | null>
 /** POST /api/recipes — save an AI-suggested recipe directly to the library. */
 recipesRouter.post(
   '/',
+  validateBody(SaveRecipeSchema),
   ah(async (req, res) => {
     const userId = req.userId!;
     const { title, description, cuisine, cookTime, difficulty, ingredients: ings, steps: stepList } =
-      req.body as {
-        title?: string;
-        description?: string;
-        cuisine?: string;
-        cookTime?: string;
-        difficulty?: string;
-        ingredients?: Array<{ item: string; quantity: string }>;
-        steps?: string[];
-      };
-
-    if (!title?.trim()) {
-      res.status(400).json({ error: 'title is required' });
-      return;
-    }
-    if (!Array.isArray(ings) || ings.length === 0) {
-      res.status(400).json({ error: 'ingredients array is required' });
-      return;
-    }
-    if (!Array.isArray(stepList) || stepList.length === 0) {
-      res.status(400).json({ error: 'steps array is required' });
-      return;
-    }
+      req.body as z.infer<typeof SaveRecipeSchema>;
 
     const saved = await db.transaction(async (tx) => {
       const [recipe] = await tx
@@ -300,13 +302,9 @@ recipesRouter.delete(
 /** POST /api/recipes/:id/scale — scaled ingredient list, no DB write. */
 recipesRouter.post(
   '/:id/scale',
+  validateBody(ScaleSchema),
   ah(async (req, res) => {
-    const { targetServings } = req.body as { targetServings?: number };
-    const target = Number(targetServings);
-    if (!target || target < 1 || target > 50) {
-      res.status(400).json({ error: 'targetServings must be between 1 and 50' });
-      return;
-    }
+    const { targetServings: target } = req.body as z.infer<typeof ScaleSchema>;
     const recipe = await ownedRecipe(req.params.id, req.userId!);
     if (!recipe) {
       res.status(404).json({ error: 'Recipe not found' });
@@ -325,13 +323,9 @@ recipesRouter.post(
 /** PATCH /api/recipes/:id/servings — persist new default servings + scaled quantities. */
 recipesRouter.patch(
   '/:id/servings',
+  validateBody(ServingsSchema),
   ah(async (req, res) => {
-    const { servings } = req.body as { servings?: number };
-    const target = Number(servings);
-    if (!target || target < 1 || target > 50) {
-      res.status(400).json({ error: 'servings must be between 1 and 50' });
-      return;
-    }
+    const { servings: target } = req.body as z.infer<typeof ServingsSchema>;
     const recipe = await ownedRecipe(req.params.id, req.userId!);
     if (!recipe) {
       res.status(404).json({ error: 'Recipe not found' });
@@ -365,18 +359,13 @@ recipesRouter.patch(
 /** POST /api/recipes/:id/adapt — AI adaptation saved as a new recipe owned by the user. */
 recipesRouter.post(
   '/:id/adapt',
+  validateBody(AdaptSchema),
   ah(async (req, res) => {
     if (!checkAdaptRateLimit(clientIp(req))) {
       res.status(429).json({ error: 'Too many adaptations. Please wait before trying again.' });
       return;
     }
-    const { type, customPrompt } = req.body as { type?: string; customPrompt?: string };
-    if (!isAdaptationType(type)) {
-      res.status(400).json({
-        error: 'Invalid adaptation type. Must be one of: vegan, vegetarian, gluten-free, dairy-free, keto, halal, nut-free, custom',
-      });
-      return;
-    }
+    const { type, customPrompt } = req.body as z.infer<typeof AdaptSchema>;
     const recipe = await ownedRecipe(req.params.id, req.userId!);
     if (!recipe) {
       res.status(404).json({ error: 'Recipe not found' });
@@ -593,21 +582,13 @@ recipesRouter.post(
 /** POST /api/recipes/:id/substitute — AI ingredient substitution suggestions. */
 recipesRouter.post(
   '/:id/substitute',
+  validateBody(SubstituteSchema),
   ah(async (req, res) => {
     if (!checkSubRateLimit(clientIp(req))) {
       res.status(429).json({ error: 'Too many substitution requests. Please wait before trying again.' });
       return;
     }
-    const { ingredientId, reason = 'dietary' } = req.body as { ingredientId?: string; reason?: string };
-    if (!ingredientId) {
-      res.status(400).json({ error: 'ingredientId is required' });
-      return;
-    }
-    const VALID_REASONS = ['dietary', 'unavailable', 'allergy', 'budget'];
-    if (!VALID_REASONS.includes(reason)) {
-      res.status(400).json({ error: 'reason must be one of: dietary, unavailable, allergy, budget' });
-      return;
-    }
+    const { ingredientId, reason } = req.body as z.infer<typeof SubstituteSchema>;
     const recipe = await ownedRecipe(req.params.id, req.userId!);
     if (!recipe) {
       res.status(404).json({ error: 'Recipe not found' });

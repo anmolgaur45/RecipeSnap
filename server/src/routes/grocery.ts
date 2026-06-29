@@ -2,9 +2,11 @@ import { Router, type Request, type Response, type RequestHandler } from 'expres
 import { and, asc, desc, eq, inArray, max } from 'drizzle-orm';
 import { db } from '../db/client';
 import { groceryLists, groceryListItems, recipes, type DbGroceryList, type DbGroceryListItem } from '../db/schema.pg';
+import { z } from 'zod';
 import { buildListFromRecipes, generateShareText, AISLE_ORDER } from '../services/groceryListBuilder';
 import { parseIngredient, classifyAisle } from '../utils/ingredientParser';
 import { requireAuth } from '../middleware/auth';
+import { validateBody } from '../middleware/validate';
 
 export const groceryRouter = Router();
 
@@ -13,6 +15,19 @@ const ah =
   (req, res, next) => {
     fn(req, res).catch(next);
   };
+
+const CreateListSchema = z.object({
+  recipeIds: z.array(z.string().uuid()).min(1, 'recipeIds must be a non-empty array'),
+  name: z.string().optional(),
+  subtractPantry: z.boolean().default(false),
+});
+const AddGroceryItemSchema = z.object({ text: z.string().trim().min(1, 'text is required') });
+const UpdateGroceryItemSchema = z.object({
+  isChecked: z.boolean().optional(),
+  quantity: z.string().optional(),
+  unit: z.string().optional(),
+  numericQuantity: z.number().nullable().optional(),
+});
 
 groceryRouter.use(requireAuth);
 
@@ -68,17 +83,10 @@ async function hydrateList(list: DbGroceryList) {
 /** POST / — create a list from this user's recipe IDs */
 groceryRouter.post(
   '/',
+  validateBody(CreateListSchema),
   ah(async (req, res) => {
     const userId = req.userId!;
-    const { recipeIds, name, subtractPantry = false } = req.body as {
-      recipeIds?: string[];
-      name?: string;
-      subtractPantry?: boolean;
-    };
-    if (!Array.isArray(recipeIds) || recipeIds.length === 0) {
-      res.status(400).json({ error: 'recipeIds must be a non-empty array' });
-      return;
-    }
+    const { recipeIds, name, subtractPantry } = req.body as z.infer<typeof CreateListSchema>;
 
     const owned = await db
       .select({ id: recipes.id })
@@ -160,6 +168,7 @@ groceryRouter.get(
 /** PATCH /:id/items/:itemId — toggle checked / update quantity */
 groceryRouter.patch(
   '/:id/items/:itemId',
+  validateBody(UpdateGroceryItemSchema),
   ah(async (req, res) => {
     const listId = Number(req.params.id);
     const itemId = Number(req.params.itemId);
@@ -182,7 +191,7 @@ groceryRouter.patch(
       return;
     }
 
-    const body = req.body as { isChecked?: boolean; quantity?: string; unit?: string; numericQuantity?: number | null };
+    const body = req.body as z.infer<typeof UpdateGroceryItemSchema>;
     const set: Partial<typeof groceryListItems.$inferInsert> = {};
     if (body.isChecked !== undefined) set.isChecked = body.isChecked;
     if (body.quantity !== undefined) set.quantity = body.quantity;
@@ -201,6 +210,7 @@ groceryRouter.patch(
 /** POST /:id/items — manually add an item */
 groceryRouter.post(
   '/:id/items',
+  validateBody(AddGroceryItemSchema),
   ah(async (req, res) => {
     const listId = Number(req.params.id);
     if (!Number.isInteger(listId)) {
@@ -212,11 +222,7 @@ groceryRouter.post(
       res.status(404).json({ error: 'List not found' });
       return;
     }
-    const { text } = req.body as { text?: string };
-    if (!text?.trim()) {
-      res.status(400).json({ error: 'text is required' });
-      return;
-    }
+    const { text } = req.body as z.infer<typeof AddGroceryItemSchema>;
 
     const parsed = parseIngredient(text.trim());
     const itemName = parsed.item || text.trim();
