@@ -1,10 +1,11 @@
 import { API_URL } from '@/constants/config';
+import { authedFetch } from '@/services/http';
 import type { GroceryList, GroceryListItem } from '@/store/types';
 
 const BASE = `${API_URL}/api/grocery-lists`;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await authedFetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });

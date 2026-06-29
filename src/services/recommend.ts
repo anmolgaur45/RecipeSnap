@@ -1,4 +1,5 @@
 import { API_URL } from '@/constants/config';
+import { authedFetch } from '@/services/http';
 
 export interface IngredientMatch {
   ingredient: string;
@@ -53,7 +54,7 @@ export async function getPantryMatches(params?: {
   if (params?.minMatch !== undefined) query.set('minMatch', String(params.minMatch));
   if (params?.prioritizeExpiring !== undefined)
     query.set('prioritizeExpiring', String(params.prioritizeExpiring));
-  const res = await fetch(`${API_URL}/api/recommendations/pantry-match?${query}`);
+  const res = await authedFetch(`${API_URL}/api/recommendations/pantry-match?${query}`);
   if (!res.ok) throw new Error('Failed to fetch pantry matches');
   return res.json() as Promise<RecipeRecommendation[]>;
 }
@@ -61,7 +62,7 @@ export async function getPantryMatches(params?: {
 export async function getAISuggestions(
   prioritizeExpiring?: boolean
 ): Promise<AISuggestedRecipe[]> {
-  const res = await fetch(`${API_URL}/api/recommendations/ai-suggest`, {
+  const res = await authedFetch(`${API_URL}/api/recommendations/ai-suggest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prioritizeExpiring }),
@@ -73,7 +74,7 @@ export async function getAISuggestions(
 export async function saveAISuggestionToLibrary(
   suggestion: AISuggestedRecipe
 ): Promise<{ id: string }> {
-  const res = await fetch(`${API_URL}/api/recipes`, {
+  const res = await authedFetch(`${API_URL}/api/recipes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(suggestion),
@@ -83,7 +84,7 @@ export async function saveAISuggestionToLibrary(
 }
 
 export async function getExpiringAlerts(): Promise<ExpiringAlert[]> {
-  const res = await fetch(`${API_URL}/api/recommendations/expiring-alerts`);
+  const res = await authedFetch(`${API_URL}/api/recommendations/expiring-alerts`);
   if (!res.ok) throw new Error('Failed to fetch expiring alerts');
   return res.json() as Promise<ExpiringAlert[]>;
 }
@@ -97,7 +98,7 @@ export interface UserPreferences {
 }
 
 export async function getUserPreferences(): Promise<UserPreferences> {
-  const res = await fetch(`${API_URL}/api/preferences`);
+  const res = await authedFetch(`${API_URL}/api/preferences`);
   if (!res.ok) throw new Error('Failed to fetch preferences');
   return res.json() as Promise<UserPreferences>;
 }
@@ -116,7 +117,7 @@ export async function importRecipe(data: {
   tags?: string[];
   thumbnailUrl?: string;
 }): Promise<{ id: string }> {
-  const res = await fetch(`${API_URL}/api/recipes/import`, {
+  const res = await authedFetch(`${API_URL}/api/recipes/import`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),

@@ -1,5 +1,4 @@
-import { API_URL } from '@/constants/config';
-import { getAccessToken } from '@/services/supabase';
+import { authedFetch } from '@/services/http';
 import {
   AdaptationResult,
   Collection,
@@ -15,12 +14,8 @@ import {
 const POLL_INTERVAL_MS = 2000;
 
 /** fetch wrapper that prefixes the API base URL and injects the Supabase bearer token. */
-async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = await getAccessToken();
-  const headers = new Headers(init.headers);
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  return fetch(`${API_URL}${path}`, { ...init, headers });
+function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  return authedFetch(path, init);
 }
 
 export async function extractRecipeFromUrl(

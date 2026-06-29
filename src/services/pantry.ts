@@ -1,8 +1,9 @@
 import { API_URL } from '@/constants/config';
+import { authedFetch } from '@/services/http';
 import type { PantryItem } from '@/store/types';
 
 async function apiFetch(url: string, options?: RequestInit) {
-  const res = await fetch(url, options);
+  const res = await authedFetch(url, options);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Request failed' }));
     throw new Error(err.error ?? `Server error: ${res.status}`);
