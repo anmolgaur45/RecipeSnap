@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Pressable, Animated, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
-import { Colors, Spacing, BorderRadius, FontSize } from '@/constants/theme';
+import { Spacing, BorderRadius, FontSize, Fonts, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 
 interface StepTimerProps {
   durationSeconds: number; // pre-parsed, always > 0
@@ -19,6 +20,8 @@ function formatTime(s: number): string {
 }
 
 export default function StepTimer({ durationSeconds }: StepTimerProps) {
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const [secondsLeft, setSecondsLeft] = useState(durationSeconds);
   const [status, setStatus] = useState<'idle' | 'running' | 'paused' | 'done'>('idle');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -78,7 +81,7 @@ export default function StepTimer({ durationSeconds }: StepTimerProps) {
 
   const timerBg = flashAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [Colors.background, '#D1FAE5'],
+    outputRange: [c.surfaceAlt, '#D1FAE5'],
   });
 
   return (
@@ -104,11 +107,11 @@ export default function StepTimer({ durationSeconds }: StepTimerProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: c.border,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.lg,
     alignItems: 'center',
@@ -126,29 +129,29 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 36,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     // Prevents layout shift as digits change
     fontVariant: ['tabular-nums'],
   },
   timeDone: {
-    color: Colors.success,
+    color: c.success,
   },
   checkmark: {
     fontSize: FontSize.xl,
-    color: Colors.success,
+    color: c.success,
     fontWeight: '700',
   },
   btn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
     borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.sm,
   },
   btnPause: {
-    backgroundColor: Colors.textSecondary,
+    backgroundColor: c.textSecondary,
   },
   btnDone: {
-    backgroundColor: Colors.success,
+    backgroundColor: c.success,
   },
   btnText: {
     color: '#fff',

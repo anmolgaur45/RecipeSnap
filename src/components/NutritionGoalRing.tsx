@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { Colors } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 
 interface Props {
   percentage: number; // 0-100
@@ -14,32 +15,24 @@ interface Props {
 
 export function NutritionGoalRing({
   percentage,
-  color = Colors.primary,
+  color,
   size = 72,
   strokeWidth = 6,
   label,
   sublabel,
 }: Props) {
+  const { colors: c } = useTheme();
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const clampedPct = Math.min(Math.max(percentage, 0), 100);
   const dashOffset = circumference * (1 - clampedPct / 100);
   const isOver = percentage > 100;
-  const ringColor = isOver ? Colors.error : color;
+  const ringColor = isOver ? c.error : (color ?? c.primary);
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        {/* Track */}
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke="#E5E7EB"
-          strokeWidth={strokeWidth}
-          fill="none"
-        />
-        {/* Progress */}
+        <Circle cx={size / 2} cy={size / 2} r={radius} stroke={c.border} strokeWidth={strokeWidth} fill="none" />
         <Circle
           cx={size / 2}
           cy={size / 2}
@@ -55,22 +48,13 @@ export function NutritionGoalRing({
         />
       </Svg>
 
-      {/* Center label */}
       {label != null && (
         <View style={{ alignItems: 'center' }}>
-          <Text
-            style={{
-              fontSize: size < 60 ? 11 : 13,
-              fontWeight: '700',
-              color: isOver ? Colors.error : Colors.textPrimary,
-            }}
-          >
+          <Text style={{ fontSize: size < 60 ? 11 : 13, fontFamily: Fonts.bodyBold, color: isOver ? c.error : c.textPrimary }}>
             {label}
           </Text>
           {sublabel && (
-            <Text style={{ fontSize: 9, color: Colors.textMuted, marginTop: 1 }}>
-              {sublabel}
-            </Text>
+            <Text style={{ fontSize: 9, color: c.textMuted, marginTop: 1, fontFamily: Fonts.body }}>{sublabel}</Text>
           )}
         </View>
       )}

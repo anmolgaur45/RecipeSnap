@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import { getSubstitutions } from '@/services/api';
 import type {
   Ingredient,
@@ -35,6 +35,7 @@ const CONFIDENCE_COLOR: Record<string, string> = {
 };
 
 function ConfidenceDots({ level }: { level: 'high' | 'medium' | 'low' }) {
+  const { colors: c } = useTheme();
   const filled = level === 'high' ? 3 : level === 'medium' ? 2 : 1;
   const color = CONFIDENCE_COLOR[level];
   return (
@@ -46,7 +47,7 @@ function ConfidenceDots({ level }: { level: 'high' | 'medium' | 'low' }) {
             width: 7,
             height: 7,
             borderRadius: 4,
-            backgroundColor: i < filled ? color : Colors.border,
+            backgroundColor: i < filled ? color : c.border,
           }}
         />
       ))}
@@ -65,42 +66,43 @@ interface CardProps {
 }
 
 function SubstitutionCard({ suggestion, onApply }: CardProps) {
+  const { colors: c } = useTheme();
   return (
     <View
       style={{
-        backgroundColor: Colors.surface,
+        backgroundColor: c.surface,
         borderRadius: 16,
         padding: 16,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: Colors.border,
+        borderColor: c.border,
         gap: 10,
       }}
     >
       {/* Name + quantity */}
       <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.textPrimary, flex: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: c.textPrimary, flex: 1 }}>
           {suggestion.replacement}
         </Text>
-        <Text style={{ fontSize: 14, color: Colors.textSecondary, fontWeight: '600', marginLeft: 8 }}>
+        <Text style={{ fontSize: 14, color: c.textSecondary, fontWeight: '600', marginLeft: 8 }}>
           {suggestion.quantity}
         </Text>
       </View>
 
       {/* Quantity note */}
       {suggestion.quantityNote ? (
-        <Text style={{ fontSize: 12, color: Colors.textMuted, fontStyle: 'italic' }}>
+        <Text style={{ fontSize: 12, color: c.textMuted, fontStyle: 'italic' }}>
           {suggestion.quantityNote}
         </Text>
       ) : null}
 
       {/* Flavor + texture */}
       <View style={{ gap: 4 }}>
-        <Text style={{ fontSize: 13, color: Colors.textSecondary }}>
+        <Text style={{ fontSize: 13, color: c.textSecondary }}>
           <Text style={{ fontWeight: '600' }}>{'Flavor  '}</Text>
           {suggestion.flavorImpact}
         </Text>
-        <Text style={{ fontSize: 13, color: Colors.textSecondary }}>
+        <Text style={{ fontSize: 13, color: c.textSecondary }}>
           <Text style={{ fontWeight: '600' }}>{'Texture  '}</Text>
           {suggestion.textureImpact}
         </Text>
@@ -124,7 +126,7 @@ function SubstitutionCard({ suggestion, onApply }: CardProps) {
         <Pressable
           onPress={onApply}
           style={{
-            backgroundColor: Colors.primary,
+            backgroundColor: c.primary,
             borderRadius: 10,
             paddingVertical: 8,
             paddingHorizontal: 16,
@@ -154,6 +156,7 @@ export function SubstitutionSheet({
   onClose,
   onApply,
 }: SubstitutionSheetProps) {
+  const { colors: c } = useTheme();
   const [reason, setReason] = useState<SubstitutionReason>('dietary');
   const [result, setResult] = useState<SubstitutionResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -208,7 +211,7 @@ export function SubstitutionSheet({
         {/* Sheet */}
         <View
           style={{
-            backgroundColor: Colors.surface,
+            backgroundColor: c.surface,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             maxHeight: '85%',
@@ -216,15 +219,15 @@ export function SubstitutionSheet({
         >
           {/* Handle bar */}
           <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.border }} />
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: c.border }} />
           </View>
 
           {/* Header */}
           <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, gap: 2 }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: c.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 }}>
               Substitute for
             </Text>
-            <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.textPrimary }} numberOfLines={2}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: c.textPrimary }} numberOfLines={2}>
               {headerIngredient}
             </Text>
           </View>
@@ -244,16 +247,16 @@ export function SubstitutionSheet({
                     borderRadius: 20,
                     paddingVertical: 7,
                     paddingHorizontal: 14,
-                    backgroundColor: selected ? Colors.primary : Colors.background,
+                    backgroundColor: selected ? c.primary : c.background,
                     borderWidth: selected ? 0 : 1,
-                    borderColor: Colors.border,
+                    borderColor: c.border,
                   }}
                 >
                   <Text
                     style={{
                       fontSize: 13,
                       fontWeight: '600',
-                      color: selected ? '#fff' : Colors.textSecondary,
+                      color: selected ? '#fff' : c.textSecondary,
                     }}
                   >
                     {label}
@@ -264,19 +267,19 @@ export function SubstitutionSheet({
           </View>
 
           {/* Divider */}
-          <View style={{ height: 1, backgroundColor: Colors.border, marginHorizontal: 20 }} />
+          <View style={{ height: 1, backgroundColor: c.border, marginHorizontal: 20 }} />
 
           {/* Body */}
           {loading ? (
             <View style={{ paddingVertical: 48, alignItems: 'center' }}>
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={{ marginTop: 12, fontSize: 13, color: Colors.textMuted }}>
+              <ActivityIndicator size="large" color={c.primary} />
+              <Text style={{ marginTop: 12, fontSize: 13, color: c.textMuted }}>
                 Finding substitutes...
               </Text>
             </View>
           ) : error ? (
             <View style={{ paddingVertical: 32, paddingHorizontal: 20, alignItems: 'center', gap: 12 }}>
-              <Text style={{ fontSize: 14, color: Colors.error, textAlign: 'center' }}>{error}</Text>
+              <Text style={{ fontSize: 14, color: c.error, textAlign: 'center' }}>{error}</Text>
               <Pressable
                 onPress={() => {
                   // Force re-fetch by toggling reason back to itself via a tiny state reset
@@ -289,7 +292,7 @@ export function SubstitutionSheet({
                       .finally(() => setLoading(false));
                   }
                 }}
-                style={{ backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 20 }}
+                style={{ backgroundColor: c.primary, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 20 }}
               >
                 <Text style={{ color: '#fff', fontWeight: '600', fontSize: 14 }}>Retry</Text>
               </Pressable>
@@ -309,11 +312,11 @@ export function SubstitutionSheet({
               ))}
 
               {result.recipeSpecificAdvice ? (
-                <View style={{ backgroundColor: `${Colors.primary}0D`, borderRadius: 12, padding: 14, marginTop: 4 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.primary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>
+                <View style={{ backgroundColor: `${c.primary}0D`, borderRadius: 12, padding: 14, marginTop: 4 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: c.primary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>
                     Chef note
                   </Text>
-                  <Text style={{ fontSize: 13, color: Colors.textSecondary, lineHeight: 19, fontStyle: 'italic' }}>
+                  <Text style={{ fontSize: 13, color: c.textSecondary, lineHeight: 19, fontStyle: 'italic' }}>
                     {result.recipeSpecificAdvice}
                   </Text>
                 </View>

@@ -10,7 +10,7 @@ import {
   UIManager,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -37,6 +37,7 @@ export function ServingScaler({
   isSaving,
   isScaling,
 }: ServingScalerProps) {
+  const { colors: c } = useTheme();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const servingsRef = useRef(currentServings);
 
@@ -97,10 +98,10 @@ export function ServingScaler({
         marginHorizontal: 16,
         marginTop: 12,
         marginBottom: 4,
-        backgroundColor: Colors.surface,
+        backgroundColor: c.surface,
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: Colors.border,
+        borderColor: c.border,
         overflow: 'hidden',
       }}
     >
@@ -114,7 +115,7 @@ export function ServingScaler({
           paddingVertical: 12,
         }}
       >
-        <Text style={{ fontSize: 13, fontWeight: '600', color: Colors.textSecondary }}>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: c.textSecondary }}>
           Servings
         </Text>
 
@@ -130,7 +131,7 @@ export function ServingScaler({
               height: 36,
               borderRadius: 18,
               borderWidth: 1.5,
-              borderColor: isAtMin ? Colors.border : Colors.primary,
+              borderColor: isAtMin ? c.border : c.primary,
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pressed || isAtMin ? 0.4 : 1,
@@ -141,7 +142,7 @@ export function ServingScaler({
                 fontSize: 20,
                 lineHeight: 22,
                 fontWeight: '400',
-                color: isAtMin ? Colors.textMuted : Colors.primary,
+                color: isAtMin ? c.textMuted : c.primary,
               }}
             >
               −
@@ -151,13 +152,13 @@ export function ServingScaler({
           {/* Count / spinner */}
           <View style={{ minWidth: 80, alignItems: 'center' }}>
             {isScaling ? (
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={c.primary} />
             ) : (
               <Text
-                style={{ fontSize: 17, fontWeight: '700', color: Colors.textPrimary }}
+                style={{ fontSize: 17, fontWeight: '700', color: c.textPrimary }}
               >
                 {currentServings}{' '}
-                <Text style={{ fontSize: 13, fontWeight: '400', color: Colors.textSecondary }}>
+                <Text style={{ fontSize: 13, fontWeight: '400', color: c.textSecondary }}>
                   {currentServings === 1 ? 'serving' : 'servings'}
                 </Text>
               </Text>
@@ -175,7 +176,7 @@ export function ServingScaler({
               height: 36,
               borderRadius: 18,
               borderWidth: 1.5,
-              borderColor: isAtMax ? Colors.border : Colors.primary,
+              borderColor: isAtMax ? c.border : c.primary,
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pressed || isAtMax ? 0.4 : 1,
@@ -186,7 +187,7 @@ export function ServingScaler({
                 fontSize: 20,
                 lineHeight: 22,
                 fontWeight: '400',
-                color: isAtMax ? Colors.textMuted : Colors.primary,
+                color: isAtMax ? c.textMuted : c.primary,
               }}
             >
               +
@@ -205,11 +206,11 @@ export function ServingScaler({
             paddingHorizontal: 16,
             paddingVertical: 10,
             borderTopWidth: 1,
-            borderTopColor: Colors.border,
-            backgroundColor: Colors.background,
+            borderTopColor: c.border,
+            backgroundColor: c.background,
           }}
         >
-          <Text style={{ fontSize: 12, color: Colors.textMuted }}>
+          <Text style={{ fontSize: 12, color: c.textMuted }}>
             Original: {originalServings} {originalServings === 1 ? 'serving' : 'servings'}
           </Text>
 
@@ -220,7 +221,7 @@ export function ServingScaler({
               paddingHorizontal: 12,
               paddingVertical: 6,
               borderRadius: 8,
-              backgroundColor: pressed || isSaving ? Colors.primaryLight : Colors.primary,
+              backgroundColor: pressed || isSaving ? c.primaryLight : c.primary,
               opacity: isSaving ? 0.6 : 1,
             })}
           >

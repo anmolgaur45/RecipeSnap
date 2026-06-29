@@ -1,8 +1,9 @@
 import { View, Animated } from 'react-native';
 import { useEffect, useRef } from 'react';
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 
 function SkeletonBox({ width, height, style }: { width: number | string; height: number; style?: object }) {
+  const { colors: c } = useTheme();
   const opacity = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
@@ -18,16 +19,17 @@ function SkeletonBox({ width, height, style }: { width: number | string; height:
 
   return (
     <Animated.View
-      style={[{ width, height, borderRadius: 8, backgroundColor: Colors.border, opacity }, style]}
+      style={[{ width, height, borderRadius: 8, backgroundColor: c.surfaceAlt, opacity }, style]}
     />
   );
 }
 
 export function RecipeCardSkeleton() {
+  const { colors: c } = useTheme();
   return (
     <View
       style={{
-        backgroundColor: Colors.surface,
+        backgroundColor: c.surface,
         borderRadius: 20,
         marginBottom: 14,
         overflow: 'hidden',
@@ -38,10 +40,7 @@ export function RecipeCardSkeleton() {
         elevation: 3,
       }}
     >
-      {/* Banner placeholder */}
       <SkeletonBox width="100%" height={92} style={{ borderRadius: 0 }} />
-
-      {/* Body */}
       <View style={{ paddingHorizontal: 16, paddingTop: 13, paddingBottom: 14 }}>
         <SkeletonBox width="75%" height={17} style={{ marginBottom: 8 }} />
         <SkeletonBox width="100%" height={13} style={{ marginBottom: 5 }} />

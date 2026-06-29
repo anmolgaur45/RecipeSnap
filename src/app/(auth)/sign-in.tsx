@@ -12,8 +12,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
 
-const PRIMARY = '#FF6B35';
-const BG = '#F8F7F4';
+const PRIMARY = '#1FAA6B';
+const BG = '#FBFAF8';
 const SURFACE = '#FFFFFF';
 const BORDER = '#E6E4DF';
 const TEXT = '#1C1B18';

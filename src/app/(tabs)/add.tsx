@@ -14,7 +14,8 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRecipeStore } from '@/store/recipeStore';
 import { ProcessingStatus } from '@/components/ProcessingStatus';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing, Fonts } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import { isValidVideoUrl, detectPlatformFromUrl } from '@/utils/formatters';
 import { getPlatformLabel } from '@/utils/videoUtils';
 import { PlatformIcon } from '@/components/PlatformIcon';
@@ -24,6 +25,7 @@ export default function AddScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ url?: string }>();
   const { extractRecipe, isProcessing, processingStatus, error, clearError } = useRecipeStore();
+  const { colors: c } = useTheme();
 
   const [url, setUrl] = useState(params.url ?? '');
   const [detectedPlatform, setDetectedPlatform] = useState<string>('unknown');
@@ -83,16 +85,16 @@ export default function AddScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+    <View style={{ flex: 1, backgroundColor: c.background }}>
       {/* Gradient hero header */}
       <LinearGradient
-        colors={['#FF6B35', '#FF8C5A']}
+        colors={['#1FAA6B', '#34C98A']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ paddingBottom: 28, paddingHorizontal: Spacing.md }}
       >
         <View style={{ paddingTop: insets.top + 8 }}>
-            <Text style={{ fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: -0.5 }}>
+            <Text style={{ fontSize: 27, fontFamily: Fonts.serif, color: '#fff', letterSpacing: -0.3 }}>
               Extract a Recipe
             </Text>
             <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>
@@ -110,7 +112,7 @@ export default function AddScreen() {
         {/* URL input card */}
         <View
           style={{
-            backgroundColor: Colors.surface,
+            backgroundColor: c.surface,
             borderRadius: 16,
             padding: 16,
             marginBottom: 16,
@@ -125,15 +127,15 @@ export default function AddScreen() {
             <TextInput
               style={{
                 flex: 1,
-                backgroundColor: Colors.background,
+                backgroundColor: c.background,
                 borderRadius: 12,
                 paddingHorizontal: 14,
                 paddingVertical: 11,
                 fontSize: 14,
-                color: Colors.textPrimary,
+                color: c.textPrimary,
               }}
               placeholder="https://www.tiktok.com/@chef/video/..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={c.textMuted}
               value={url}
               onChangeText={setUrl}
               autoCapitalize="none"
@@ -144,13 +146,13 @@ export default function AddScreen() {
             <Pressable
               onPress={handlePaste}
               style={{
-                backgroundColor: Colors.background,
+                backgroundColor: c.background,
                 borderRadius: 12,
                 paddingHorizontal: 14,
                 paddingVertical: 11,
               }}
             >
-              <Text style={{ fontSize: 14, color: Colors.primary, fontWeight: '600' }}>Paste</Text>
+              <Text style={{ fontSize: 14, color: c.primary, fontWeight: '600' }}>Paste</Text>
             </Pressable>
           </View>
 
@@ -160,12 +162,12 @@ export default function AddScreen() {
               {isValid ? (
                 <>
                   <PlatformIcon platform={detectedPlatform} size={20} />
-                  <Text style={{ fontSize: 13, color: Colors.success, fontWeight: '600' }}>
+                  <Text style={{ fontSize: 13, color: c.success, fontWeight: '600' }}>
                     {getPlatformLabel(detectedPlatform)} detected
                   </Text>
                 </>
               ) : (
-                <Text style={{ fontSize: 13, color: Colors.error }}>
+                <Text style={{ fontSize: 13, color: c.error }}>
                   Please enter a valid Instagram, TikTok, or YouTube link
                 </Text>
               )}
@@ -176,24 +178,24 @@ export default function AddScreen() {
         {/* Extract button with gradient */}
         <Pressable onPress={handleExtract} disabled={!isValid} style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 28 }}>
           <LinearGradient
-            colors={isValid ? ['#FF6B35', '#E55A24'] : [Colors.border, Colors.border]}
+            colors={isValid ? ['#1FAA6B', '#178A57'] : [c.border, c.border]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={{ paddingVertical: 16, alignItems: 'center' }}
           >
-            <Text style={{ fontSize: 16, fontWeight: '700', color: isValid ? '#fff' : Colors.textMuted }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: isValid ? '#fff' : c.textMuted }}>
               Extract Recipe ✨
             </Text>
           </LinearGradient>
         </Pressable>
 
         {/* Supported platforms */}
-        <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 12 }}>
+        <Text style={{ fontSize: 11, fontWeight: '700', color: c.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 12 }}>
           Supported Platforms
         </Text>
         <View
           style={{
-            backgroundColor: Colors.surface,
+            backgroundColor: c.surface,
             borderRadius: 16,
             overflow: 'hidden',
             shadowColor: '#000',
@@ -213,11 +215,11 @@ export default function AddScreen() {
                 paddingHorizontal: 16,
                 paddingVertical: 13,
                 borderBottomWidth: i < SUPPORTED_PLATFORMS.length - 1 ? 1 : 0,
-                borderBottomColor: Colors.border,
+                borderBottomColor: c.border,
               }}
             >
               <PlatformIcon platform={p.id} size={32} />
-              <Text style={{ fontSize: 14, fontWeight: '500', color: Colors.textPrimary }}>{p.label}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: c.textPrimary }}>{p.label}</Text>
             </View>
           ))}
         </View>

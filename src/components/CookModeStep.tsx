@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
-import { Colors, Spacing, BorderRadius, FontSize, Shadow } from '@/constants/theme';
+import { Spacing, BorderRadius, FontSize, Shadow, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import type { RecipeStep } from '@/store/types';
 import StepTimer from './StepTimer';
 
@@ -46,6 +47,8 @@ function parseDurationToSeconds(duration: string | null): number | null {
 }
 
 export default function CookModeStep({ step, stepIndex, totalSteps, autoRead }: Props) {
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const parsedDuration = parseDurationToSeconds(step.duration);
 
@@ -132,14 +135,14 @@ export default function CookModeStep({ step, stepIndex, totalSteps, autoRead }: 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flexGrow: 1,
     padding: Spacing.md,
     justifyContent: 'center',
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
     ...Shadow.card,
@@ -152,7 +155,7 @@ const styles = StyleSheet.create({
   },
   badge: {
     alignSelf: 'flex-start',
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
     borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
@@ -168,52 +171,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: c.border,
   },
   speakerIcon: {
     fontSize: 18,
   },
   instruction: {
     fontSize: FontSize.xl,
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     lineHeight: FontSize.xl * 1.55,
     fontWeight: '500',
     marginBottom: Spacing.lg,
   },
   durationChip: {
     alignSelf: 'flex-start',
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
     borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: c.border,
   },
   durationText: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     fontWeight: '500',
   },
   tipBox: {
-    backgroundColor: '#FFF3ED',
+    backgroundColor: c.primary + '12',
     borderRadius: BorderRadius.md,
     borderLeftWidth: 3,
-    borderLeftColor: Colors.primary,
+    borderLeftColor: c.primary,
     padding: Spacing.md,
     marginTop: Spacing.sm,
   },
   tipLabel: {
     fontSize: FontSize.sm,
-    color: Colors.primary,
+    color: c.primary,
     fontWeight: '700',
     marginBottom: Spacing.xs,
   },
   tipText: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     lineHeight: FontSize.sm * 1.5,
   },
 });

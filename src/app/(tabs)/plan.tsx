@@ -19,7 +19,8 @@ import { useRecipeStore } from '@/store/recipeStore';
 import { MealPlanCalendar } from '@/components/MealPlanCalendar';
 import { DayNutritionBar } from '@/components/DayNutritionBar';
 import { getDayNutrition } from '@/services/mealPlan';
-import { Colors, Spacing, BorderRadius, Shadow } from '@/constants/theme';
+import { Spacing, BorderRadius, Shadow, Fonts } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import type { MealSlot, MealPlanEntry, DayNutrition, Recipe } from '@/store/types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ interface EntryCardProps {
 }
 
 function EntryCard({ entry, onRemove, onMarkCooked }: EntryCardProps) {
+  const { colors: c } = useTheme();
   const isCooked = entry.isCooked;
 
   return (
@@ -78,12 +80,12 @@ function EntryCard({ entry, onRemove, onMarkCooked }: EntryCardProps) {
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isCooked ? '#F0FDF4' : Colors.surface,
+        backgroundColor: isCooked ? c.success + '14' : c.surface,
         borderRadius: BorderRadius.sm,
         padding: 10,
         marginTop: 6,
         borderWidth: 1,
-        borderColor: isCooked ? '#86EFAC' : Colors.border,
+        borderColor: isCooked ? c.success + '44' : c.border,
         ...Shadow.sm,
       }}
     >
@@ -93,7 +95,7 @@ function EntryCard({ entry, onRemove, onMarkCooked }: EntryCardProps) {
           width: 8,
           height: 8,
           borderRadius: 4,
-          backgroundColor: isCooked ? Colors.success : Colors.border,
+          backgroundColor: isCooked ? c.success : c.border,
           marginRight: 8,
           flexShrink: 0,
         }}
@@ -104,7 +106,7 @@ function EntryCard({ entry, onRemove, onMarkCooked }: EntryCardProps) {
           style={{
             fontSize: 13,
             fontWeight: '600',
-            color: isCooked ? Colors.textSecondary : Colors.textPrimary,
+            color: isCooked ? c.textSecondary : c.textPrimary,
             textDecorationLine: isCooked ? 'line-through' : 'none',
           }}
           numberOfLines={1}
@@ -112,11 +114,11 @@ function EntryCard({ entry, onRemove, onMarkCooked }: EntryCardProps) {
           {(entry as any).recipeTitle ?? 'Recipe'}
         </Text>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 2 }}>
-          <Text style={{ fontSize: 11, color: Colors.textMuted }}>
+          <Text style={{ fontSize: 11, color: c.textMuted }}>
             {entry.servings} serving{entry.servings !== 1 ? 's' : ''}
           </Text>
           {(entry as any).nutrition && (
-            <Text style={{ fontSize: 11, color: Colors.textMuted }}>
+            <Text style={{ fontSize: 11, color: c.textMuted }}>
               · {(entry as any).nutrition.calories} kcal
             </Text>
           )}
@@ -129,7 +131,7 @@ function EntryCard({ entry, onRemove, onMarkCooked }: EntryCardProps) {
           onPress={onMarkCooked}
           hitSlop={8}
           style={{
-            backgroundColor: Colors.success + '15',
+            backgroundColor: c.success + '15',
             borderRadius: BorderRadius.sm,
             padding: 6,
             marginLeft: 6,
@@ -147,7 +149,7 @@ function EntryCard({ entry, onRemove, onMarkCooked }: EntryCardProps) {
           marginLeft: 4,
         }}
       >
-        <Text style={{ fontSize: 12, color: Colors.textMuted }}>✕</Text>
+        <Text style={{ fontSize: 12, color: c.textMuted }}>✕</Text>
       </Pressable>
     </View>
   );
@@ -157,6 +159,7 @@ function EntryCard({ entry, onRemove, onMarkCooked }: EntryCardProps) {
 
 export default function PlanScreen() {
   const insets = useSafeAreaInsets();
+  const { colors: c } = useTheme();
   const {
     activePlan,
     nutritionGoals,
@@ -377,13 +380,13 @@ export default function PlanScreen() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
+    <View style={{ flex: 1, backgroundColor: c.background }}>
+      <StatusBar barStyle="dark-content" backgroundColor={c.surface} />
 
       {/* ── Header ── */}
       <View
         style={{
-          backgroundColor: Colors.surface,
+          backgroundColor: c.surface,
           paddingHorizontal: Spacing.md,
           paddingTop: insets.top + 8,
           paddingBottom: 4,
@@ -398,15 +401,15 @@ export default function PlanScreen() {
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                fontSize: 24,
-                fontWeight: '800',
-                color: Colors.textPrimary,
-                letterSpacing: -0.5,
+                fontSize: 25,
+                fontFamily: Fonts.serif,
+                color: c.textPrimary,
+                letterSpacing: -0.3,
               }}
             >
               Meal Plan
             </Text>
-            <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 1 }}>
+            <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 1 }}>
               {activePlan ? activePlan.name : 'Plan your week'}
             </Text>
           </View>
@@ -419,7 +422,7 @@ export default function PlanScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 4,
-                backgroundColor: Colors.primary,
+                backgroundColor: c.primary,
                 paddingHorizontal: 12,
                 paddingVertical: 7,
                 borderRadius: BorderRadius.full,
@@ -450,8 +453,8 @@ export default function PlanScreen() {
       {/* ── Content ── */}
       {isLoading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={{ fontSize: 14, color: Colors.textSecondary, marginTop: 12 }}>
+          <ActivityIndicator size="large" color={c.primary} />
+          <Text style={{ fontSize: 14, color: c.textSecondary, marginTop: 12 }}>
             Loading plan...
           </Text>
         </View>
@@ -468,7 +471,7 @@ export default function PlanScreen() {
           {!activePlan && (
             <View
               style={{
-                backgroundColor: Colors.surface,
+                backgroundColor: c.surface,
                 borderRadius: BorderRadius.lg,
                 padding: Spacing.lg,
                 alignItems: 'center',
@@ -481,7 +484,7 @@ export default function PlanScreen() {
                 style={{
                   fontSize: 18,
                   fontWeight: '800',
-                  color: Colors.textPrimary,
+                  color: c.textPrimary,
                   marginBottom: 6,
                   textAlign: 'center',
                 }}
@@ -491,7 +494,7 @@ export default function PlanScreen() {
               <Text
                 style={{
                   fontSize: 14,
-                  color: Colors.textSecondary,
+                  color: c.textSecondary,
                   textAlign: 'center',
                   marginBottom: 20,
                   lineHeight: 20,
@@ -503,7 +506,7 @@ export default function PlanScreen() {
               <Pressable
                 onPress={handleCreateWeekPlan}
                 style={{
-                  backgroundColor: Colors.primary,
+                  backgroundColor: c.primary,
                   paddingHorizontal: 24,
                   paddingVertical: 12,
                   borderRadius: BorderRadius.full,
@@ -529,12 +532,12 @@ export default function PlanScreen() {
               <View
                 key={date}
                 style={{
-                  backgroundColor: Colors.surface,
+                  backgroundColor: c.surface,
                   borderRadius: BorderRadius.lg,
                   marginBottom: 12,
                   overflow: 'hidden',
                   borderWidth: isToday ? 2 : 1,
-                  borderColor: isToday ? Colors.primary : Colors.border,
+                  borderColor: isToday ? c.primary : c.border,
                   ...Shadow.card,
                 }}
               >
@@ -545,9 +548,9 @@ export default function PlanScreen() {
                     alignItems: 'center',
                     paddingHorizontal: Spacing.md,
                     paddingVertical: 10,
-                    backgroundColor: isToday ? Colors.primary + '08' : 'transparent',
+                    backgroundColor: isToday ? c.primary + '08' : 'transparent',
                     borderBottomWidth: 1,
-                    borderBottomColor: Colors.border,
+                    borderBottomColor: c.border,
                   }}
                 >
                   <View
@@ -555,7 +558,7 @@ export default function PlanScreen() {
                       width: 36,
                       height: 36,
                       borderRadius: 18,
-                      backgroundColor: isToday ? Colors.primary : Colors.background,
+                      backgroundColor: isToday ? c.primary : c.background,
                       alignItems: 'center',
                       justifyContent: 'center',
                       marginRight: 10,
@@ -565,7 +568,7 @@ export default function PlanScreen() {
                       style={{
                         fontSize: 14,
                         fontWeight: '800',
-                        color: isToday ? '#fff' : Colors.textPrimary,
+                        color: isToday ? '#fff' : c.textPrimary,
                       }}
                     >
                       {dayNum}
@@ -576,13 +579,13 @@ export default function PlanScreen() {
                       style={{
                         fontSize: 15,
                         fontWeight: '700',
-                        color: Colors.textPrimary,
+                        color: c.textPrimary,
                       }}
                     >
                       {dayName}
                       {isToday ? ' · Today' : ''}
                     </Text>
-                    <Text style={{ fontSize: 12, color: Colors.textMuted }}>{monthStr}</Text>
+                    <Text style={{ fontSize: 12, color: c.textMuted }}>{monthStr}</Text>
                   </View>
 
                   {hasEntries && nut && (
@@ -593,13 +596,13 @@ export default function PlanScreen() {
                           fontWeight: '700',
                           color:
                             nut.percentages.calories > 100
-                              ? Colors.error
-                              : Colors.textSecondary,
+                              ? c.error
+                              : c.textSecondary,
                         }}
                       >
                         {nut.totals.calories} kcal
                       </Text>
-                      <Text style={{ fontSize: 10, color: Colors.textMuted }}>
+                      <Text style={{ fontSize: 10, color: c.textMuted }}>
                         {nut.percentages.calories}% of goal
                       </Text>
                     </View>
@@ -622,7 +625,7 @@ export default function PlanScreen() {
                             style={{
                               fontSize: 11,
                               fontWeight: '700',
-                              color: Colors.textMuted,
+                              color: c.textMuted,
                               marginLeft: 4,
                               textTransform: 'uppercase',
                               letterSpacing: 0.5,
@@ -652,7 +655,7 @@ export default function PlanScreen() {
                               paddingHorizontal: 12,
                               borderRadius: BorderRadius.sm,
                               borderWidth: 1,
-                              borderColor: Colors.border,
+                              borderColor: c.border,
                               borderStyle: 'dashed',
                               alignItems: 'center',
                               flexDirection: 'row',
@@ -660,11 +663,11 @@ export default function PlanScreen() {
                               gap: 4,
                             }}
                           >
-                            <Text style={{ fontSize: 13, color: Colors.textMuted }}>+</Text>
+                            <Text style={{ fontSize: 13, color: c.textMuted }}>+</Text>
                             <Text
                               style={{
                                 fontSize: 12,
-                                color: Colors.textMuted,
+                                color: c.textMuted,
                                 fontWeight: '500',
                               }}
                             >
@@ -683,7 +686,7 @@ export default function PlanScreen() {
                     <View
                       style={{
                         height: 1,
-                        backgroundColor: Colors.border,
+                        backgroundColor: c.border,
                         marginHorizontal: Spacing.md,
                       }}
                     />
@@ -700,7 +703,7 @@ export default function PlanScreen() {
               style={{
                 textAlign: 'center',
                 fontSize: 13,
-                color: Colors.textMuted,
+                color: c.textMuted,
                 marginTop: 8,
               }}
             >
@@ -722,7 +725,7 @@ export default function PlanScreen() {
           {/* Sheet */}
           <Animated.View
             style={{
-              backgroundColor: Colors.surface,
+              backgroundColor: c.surface,
               borderTopLeftRadius: 28,
               borderTopRightRadius: 28,
               paddingBottom: insets.bottom + 16,
@@ -735,7 +738,7 @@ export default function PlanScreen() {
               style={{
                 width: 40,
                 height: 4,
-                backgroundColor: Colors.border,
+                backgroundColor: c.border,
                 borderRadius: 2,
                 alignSelf: 'center',
                 marginTop: 12,
@@ -750,7 +753,7 @@ export default function PlanScreen() {
                   width: 56,
                   height: 56,
                   borderRadius: 28,
-                  backgroundColor: Colors.primary + '15',
+                  backgroundColor: c.primary + '15',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: 10,
@@ -764,13 +767,13 @@ export default function PlanScreen() {
                 style={{
                   fontSize: 19,
                   fontWeight: '800',
-                  color: Colors.textPrimary,
+                  color: c.textPrimary,
                   letterSpacing: -0.3,
                 }}
               >
                 {addSheet ? MEAL_SLOTS.find((s) => s.slot === addSheet.slot)?.label : ''}
               </Text>
-              <Text style={{ fontSize: 13, color: Colors.textMuted, marginTop: 3 }}>
+              <Text style={{ fontSize: 13, color: c.textMuted, marginTop: 3 }}>
                 {addSheet ? formatSheetDate(addSheet.date) : ''}
               </Text>
             </View>
@@ -783,13 +786,13 @@ export default function PlanScreen() {
                 justifyContent: 'space-between',
                 marginHorizontal: Spacing.md,
                 marginBottom: 16,
-                backgroundColor: Colors.background,
+                backgroundColor: c.background,
                 borderRadius: BorderRadius.md,
                 paddingHorizontal: 16,
                 paddingVertical: 10,
               }}
             >
-              <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.textSecondary }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: c.textSecondary }}>
                 Servings
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 0 }}>
@@ -800,20 +803,20 @@ export default function PlanScreen() {
                     width: 34,
                     height: 34,
                     borderRadius: 17,
-                    backgroundColor: Colors.surface,
+                    backgroundColor: c.surface,
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: 1,
-                    borderColor: Colors.border,
+                    borderColor: c.border,
                   }}
                 >
-                  <Text style={{ fontSize: 18, color: Colors.textPrimary, lineHeight: 22 }}>−</Text>
+                  <Text style={{ fontSize: 18, color: c.textPrimary, lineHeight: 22 }}>−</Text>
                 </Pressable>
                 <Text
                   style={{
                     fontSize: 17,
                     fontWeight: '700',
-                    color: Colors.textPrimary,
+                    color: c.textPrimary,
                     minWidth: 36,
                     textAlign: 'center',
                   }}
@@ -827,7 +830,7 @@ export default function PlanScreen() {
                     width: 34,
                     height: 34,
                     borderRadius: 17,
-                    backgroundColor: Colors.primary,
+                    backgroundColor: c.primary,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
@@ -843,24 +846,24 @@ export default function PlanScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: Colors.background,
+                  backgroundColor: c.background,
                   borderRadius: BorderRadius.md,
                   paddingHorizontal: 12,
                   borderWidth: 1,
-                  borderColor: Colors.border,
+                  borderColor: c.border,
                 }}
               >
-                <Text style={{ fontSize: 14, color: Colors.textMuted, marginRight: 6 }}>🔍</Text>
+                <Text style={{ fontSize: 14, color: c.textMuted, marginRight: 6 }}>🔍</Text>
                 <TextInput
                   value={recipeSearch}
                   onChangeText={setRecipeSearch}
                   placeholder="Search recipes..."
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={c.textMuted}
                   style={{
                     flex: 1,
                     paddingVertical: 10,
                     fontSize: 14,
-                    color: Colors.textPrimary,
+                    color: c.textPrimary,
                   }}
                 />
               </View>
@@ -875,7 +878,7 @@ export default function PlanScreen() {
                 <Text
                   style={{
                     fontSize: 14,
-                    color: Colors.textMuted,
+                    color: c.textMuted,
                     textAlign: 'center',
                     lineHeight: 20,
                   }}
@@ -892,7 +895,7 @@ export default function PlanScreen() {
                 renderItem={({ item }) => (
                   <Pressable
                     onPress={() => handleAddRecipe(item)}
-                    android_ripple={{ color: Colors.background }}
+                    android_ripple={{ color: c.background }}
                   >
                     <View
                       style={{
@@ -901,7 +904,7 @@ export default function PlanScreen() {
                         paddingHorizontal: Spacing.md,
                         paddingVertical: 12,
                         borderBottomWidth: 1,
-                        borderBottomColor: Colors.border,
+                        borderBottomColor: c.border,
                         gap: 12,
                       }}
                     >
@@ -911,7 +914,7 @@ export default function PlanScreen() {
                           width: 40,
                           height: 40,
                           borderRadius: 12,
-                          backgroundColor: Colors.primary + '12',
+                          backgroundColor: c.primary + '12',
                           alignItems: 'center',
                           justifyContent: 'center',
                           flexShrink: 0,
@@ -931,12 +934,12 @@ export default function PlanScreen() {
 
                       <View style={{ flex: 1 }}>
                         <Text
-                          style={{ fontSize: 14, fontWeight: '700', color: Colors.textPrimary }}
+                          style={{ fontSize: 14, fontWeight: '700', color: c.textPrimary }}
                           numberOfLines={1}
                         >
                           {item.title}
                         </Text>
-                        <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 2 }}>
+                        <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 2 }}>
                           {[
                             item.cuisine,
                             item.cookTime,
@@ -951,7 +954,7 @@ export default function PlanScreen() {
 
                       <View
                         style={{
-                          backgroundColor: Colors.primary,
+                          backgroundColor: c.primary,
                           borderRadius: 10,
                           paddingHorizontal: 12,
                           paddingVertical: 6,

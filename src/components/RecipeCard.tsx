@@ -2,7 +2,8 @@ import { Pressable, View, Text, Image, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Recipe } from '@/store/types';
-import { Colors, Shadow } from '@/constants/theme';
+import { Fonts, Shadow } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import { API_URL } from '@/constants/config';
 
 // ── Cuisine theme map ──────────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ interface RecipeCardProps {
 }
 
 export function RecipeCard({ recipe }: RecipeCardProps) {
+  const { colors: c } = useTheme();
   const { bg, bg2, emoji } = getCuisineTheme(recipe.cuisine, recipe.title);
   const photoUri = getRecipePhoto(recipe);
 
@@ -87,7 +89,7 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
       style={({ pressed }) => ({
         opacity: pressed ? 0.9 : 1,
         transform: [{ scale: pressed ? 0.985 : 1 }],
-        backgroundColor: Colors.surface,
+        backgroundColor: c.surface,
         borderRadius: 20,
         marginBottom: 14,
         overflow: 'hidden',
@@ -133,7 +135,7 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
       <View style={{ paddingHorizontal: 16, paddingTop: 13, paddingBottom: 14 }}>
         {/* Title */}
         <Text
-          style={{ fontSize: 16, fontWeight: '700', color: Colors.textPrimary, lineHeight: 22, marginBottom: 5 }}
+          style={{ fontSize: 16, fontFamily: Fonts.bodyBold, color: c.textPrimary, lineHeight: 22, marginBottom: 5 }}
           numberOfLines={2}
         >
           {recipe.title}
@@ -142,7 +144,7 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
         {/* Description */}
         {recipe.description ? (
           <Text
-            style={{ fontSize: 13, color: Colors.textSecondary, lineHeight: 18, marginBottom: 11 }}
+            style={{ fontSize: 13, fontFamily: Fonts.body, color: c.textSecondary, lineHeight: 18, marginBottom: 11 }}
             numberOfLines={2}
           >
             {recipe.description}
@@ -157,7 +159,7 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
               backgroundColor: `${bg}1A`, borderRadius: 20,
               paddingHorizontal: 9, paddingVertical: 4, marginRight: 8,
             }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: bg }}>{recipe.cuisine}</Text>
+              <Text style={{ fontSize: 11, fontFamily: Fonts.bodyBold, color: bg }}>{recipe.cuisine}</Text>
             </View>
           )}
 
@@ -165,12 +167,12 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
           {totalMins && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginRight: 10 }}>
               <Text style={{ fontSize: 13 }}>⏱</Text>
-              <Text style={{ fontSize: 12, color: Colors.textMuted, fontWeight: '500' }}>{totalMins}</Text>
+              <Text style={{ fontSize: 12, color: c.textMuted, fontFamily: Fonts.bodyMedium }}>{totalMins}</Text>
             </View>
           )}
 
           {/* Ingredient count — pushed to right */}
-          <Text style={{ fontSize: 12, color: Colors.textMuted, marginLeft: 'auto' }}>
+          <Text style={{ fontSize: 12, color: c.textMuted, fontFamily: Fonts.body, marginLeft: 'auto' }}>
             {recipe.ingredients.length} ingredients
           </Text>
         </View>

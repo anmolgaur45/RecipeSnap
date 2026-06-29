@@ -1,8 +1,9 @@
 import { View, Text, Pressable, StyleSheet, Alert } from 'react-native';
-import { useRef } from 'react';
+import { useRef, useMemo } from 'react';
 import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import type { PantryItem } from '@/store/types';
 
 interface Props {
@@ -11,13 +12,10 @@ interface Props {
   onEdit: () => void;
 }
 
-const EXPIRY_COLORS: Record<string, string> = {
-  fresh: Colors.success,
-  expiring_soon: Colors.warning,
-  expired: Colors.error,
-};
-
 export function PantryItemRow({ item, onDelete, onEdit }: Props) {
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
+  const EXPIRY_COLORS: Record<string, string> = { fresh: c.success, expiring_soon: c.warning, expired: c.error };
   const swipeRef = useRef<Swipeable>(null);
 
   const handleDelete = () => {
@@ -47,7 +45,7 @@ export function PantryItemRow({ item, onDelete, onEdit }: Props) {
   );
 
   const quantityText = [item.quantity, item.unit].filter(Boolean).join(' ');
-  const expiryColor = EXPIRY_COLORS[item.expiryStatus] ?? Colors.success;
+  const expiryColor = EXPIRY_COLORS[item.expiryStatus] ?? c.success;
 
   return (
     <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
@@ -92,15 +90,15 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
     paddingVertical: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: c.border,
     gap: 12,
   },
   expiryDot: {
@@ -121,10 +119,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
   },
   stapleBadge: {
-    backgroundColor: `${Colors.primary}18`,
+    backgroundColor: `${c.primary}18`,
     borderRadius: 10,
     paddingHorizontal: 7,
     paddingVertical: 2,
@@ -132,7 +130,7 @@ const styles = StyleSheet.create({
   stapleBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.primary,
+    color: c.primary,
   },
   bottomRow: {
     flexDirection: 'row',
@@ -141,7 +139,7 @@ const styles = StyleSheet.create({
   },
   quantity: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
   },
   expiry: {
     fontSize: 12,
@@ -149,11 +147,11 @@ const styles = StyleSheet.create({
   },
   notes: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: c.textMuted,
     fontStyle: 'italic',
   },
   deleteAction: {
-    backgroundColor: Colors.error,
+    backgroundColor: c.error,
     justifyContent: 'center',
     alignItems: 'center',
     width: 70,

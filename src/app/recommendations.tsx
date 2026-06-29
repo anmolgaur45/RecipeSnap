@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Colors, Spacing, BorderRadius, FontSize, Shadow } from '@/constants/theme';
+import { Spacing, BorderRadius, FontSize, Shadow, Fonts, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import { RecipeRecommendationCard } from '@/components/RecipeRecommendationCard';
 import {
   getPantryMatches,
@@ -22,9 +23,12 @@ import {
   type ExpiringAlert,
 } from '@/services/recommend';
 import { API_URL } from '@/constants/config';
+import { authedFetch } from '@/services/http';
 
 export default function RecommendationsScreen() {
   const insets = useSafeAreaInsets();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
 
   const [ready, setReady] = useState<RecipeRecommendation[]>([]);
   const [almost, setAlmost] = useState<RecipeRecommendation[]>([]);
@@ -72,7 +76,7 @@ export default function RecommendationsScreen() {
   const handleAddMissing = async (missingItems: string[]) => {
     try {
       // Create a grocery list with the missing items
-      const createRes = await fetch(`${API_URL}/api/grocery-lists`, {
+      const createRes = await authedFetch(`${API_URL}/api/grocery-lists`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Missing Ingredients' }),
@@ -83,10 +87,10 @@ export default function RecommendationsScreen() {
       // Add each missing item
       await Promise.all(
         missingItems.map((item) =>
-          fetch(`${API_URL}/api/grocery-lists/${list.id}/items`, {
+          authedFetch(`${API_URL}/api/grocery-lists/${list.id}/items`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ item }),
+            body: JSON.stringify({ text: item }),
           })
         )
       );
@@ -111,7 +115,7 @@ export default function RecommendationsScreen() {
           <Text style={styles.headerTitle}>What Can I Cook?</Text>
         </View>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={c.primary} />
           <Text style={styles.loadingText}>Checking your pantry…</Text>
         </View>
       </View>
@@ -181,7 +185,7 @@ export default function RecommendationsScreen() {
                 <View style={styles.alertHeader}>
                   <View style={[
                     styles.alertDot,
-                    { backgroundColor: alert.expiryStatus === 'expired' ? Colors.error : Colors.warning },
+                    { backgroundColor: alert.expiryStatus === 'expired' ? c.error : c.warning },
                   ]} />
                   <Text style={styles.alertName}>{alert.pantryItemName}</Text>
                   {alert.expiresAt && (
@@ -261,7 +265,7 @@ export default function RecommendationsScreen() {
               disabled={aiLoading}
             >
               {aiLoading ? (
-                <ActivityIndicator size="small" color={Colors.surface} />
+                <ActivityIndicator size="small" color={c.surface} />
               ) : (
                 <Text style={styles.aiBtnText}>✨ Get AI Suggestions</Text>
               )}
@@ -277,9 +281,9 @@ export default function RecommendationsScreen() {
                 disabled={aiLoading}
               >
                 {aiLoading ? (
-                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <ActivityIndicator size="small" color={c.primary} />
                 ) : (
-                  <Text style={[styles.aiBtnText, { color: Colors.primary }]}>↻ Regenerate</Text>
+                  <Text style={[styles.aiBtnText, { color: c.primary }]}>↻ Regenerate</Text>
                 )}
               </Pressable>
             </>
@@ -293,6 +297,8 @@ export default function RecommendationsScreen() {
 // ── AI Suggestion Card ────────────────────────────────────────────────────────
 
 function AISuggestionCard({ suggestion }: { suggestion: AISuggestedRecipe }) {
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -360,7 +366,7 @@ function AISuggestionCard({ suggestion }: { suggestion: AISuggestedRecipe }) {
         disabled={saving}
       >
         {saving ? (
-          <ActivityIndicator size="small" color={Colors.primary} />
+          <ActivityIndicator size="small" color={c.primary} />
         ) : (
           <Text style={[styles.saveToLibraryText, savedId ? styles.saveToLibraryTextDone : null]}>
             {savedId ? '✓ Saved — View Recipe' : '+ Save to Library'}
@@ -373,19 +379,19 @@ function AISuggestionCard({ suggestion }: { suggestion: AISuggestedRecipe }) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: c.border,
     gap: Spacing.sm,
   },
   backBtn: {
@@ -393,13 +399,13 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: FontSize.xl,
-    color: Colors.primary,
+    color: c.primary,
     fontWeight: '600',
   },
   headerTitle: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    fontFamily: Fonts.serif,
+    color: c.textPrimary,
   },
   scroll: {
     flex: 1,
@@ -416,25 +422,25 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
   },
   errorEmoji: {
     fontSize: 48,
   },
   errorText: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
     paddingHorizontal: Spacing.xl,
   },
   retryBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
   },
   retryText: {
-    color: Colors.surface,
+    color: c.surface,
     fontWeight: '700',
     fontSize: FontSize.md,
   },
@@ -449,11 +455,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: FontSize.xl,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
   },
   emptyDesc: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
     paddingHorizontal: Spacing.xl,
     lineHeight: 20,
@@ -472,21 +478,21 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: FontSize.lg,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    fontFamily: Fonts.serif,
+    color: c.textPrimary,
   },
   sectionSub: {
     fontSize: FontSize.xs,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     marginBottom: Spacing.sm,
   },
   alertCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.warning,
+    borderLeftColor: c.warning,
     ...Shadow.sm,
   },
   alertHeader: {
@@ -502,24 +508,24 @@ const styles = StyleSheet.create({
   alertName: {
     fontSize: FontSize.md,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     flex: 1,
   },
   alertDate: {
     fontSize: FontSize.xs,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
   },
   alertRecipes: {
     marginTop: Spacing.sm,
     paddingTop: Spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: c.border,
     gap: 4,
   },
   alertRecipesLabel: {
     fontSize: FontSize.xs,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     marginBottom: 4,
   },
   alertRecipeRow: {
@@ -530,16 +536,16 @@ const styles = StyleSheet.create({
   },
   alertRecipeTitle: {
     fontSize: FontSize.sm,
-    color: Colors.primary,
+    color: c.primary,
     fontWeight: '500',
     flex: 1,
   },
   alertRecipePct: {
     fontSize: FontSize.xs,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
   },
   aiBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
     borderRadius: BorderRadius.full,
     paddingVertical: Spacing.sm + 2,
     alignItems: 'center',
@@ -547,9 +553,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   aiBtnOutline: {
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderWidth: 1.5,
-    borderColor: Colors.primary,
+    borderColor: c.primary,
     marginTop: Spacing.sm,
   },
   aiBtnDisabled: {
@@ -558,10 +564,10 @@ const styles = StyleSheet.create({
   aiBtnText: {
     fontSize: FontSize.md,
     fontWeight: '700',
-    color: Colors.surface,
+    color: c.surface,
   },
   aiCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
@@ -579,11 +585,11 @@ const styles = StyleSheet.create({
   aiCardTitle: {
     fontSize: FontSize.md,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
   },
   aiCardDesc: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     lineHeight: 18,
   },
   aiCardChips: {
@@ -594,40 +600,40 @@ const styles = StyleSheet.create({
   },
   metaChip: {
     fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    backgroundColor: Colors.background,
+    color: c.textSecondary,
+    backgroundColor: c.background,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: BorderRadius.full,
   },
   expandIcon: {
     fontSize: FontSize.xs,
-    color: Colors.textMuted,
+    color: c.textMuted,
     paddingTop: 4,
   },
   aiCardBody: {
     marginTop: Spacing.sm,
     paddingTop: Spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: c.border,
     gap: 2,
   },
   aiCardSectionLabel: {
     fontSize: FontSize.xs,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   aiCardItem: {
     fontSize: FontSize.sm,
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     lineHeight: 18,
   },
   aiCardStep: {
     fontSize: FontSize.sm,
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     lineHeight: 18,
     marginBottom: 2,
   },
@@ -636,19 +642,19 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs + 2,
     borderRadius: BorderRadius.full,
     borderWidth: 1.5,
-    borderColor: Colors.primary,
+    borderColor: c.primary,
     alignItems: 'center',
   },
   saveToLibraryBtnDone: {
-    borderColor: Colors.success,
-    backgroundColor: `${Colors.success}14`,
+    borderColor: c.success,
+    backgroundColor: `${c.success}14`,
   },
   saveToLibraryText: {
     fontSize: FontSize.sm,
     fontWeight: '600',
-    color: Colors.primary,
+    color: c.primary,
   },
   saveToLibraryTextDone: {
-    color: Colors.success,
+    color: c.success,
   },
 });

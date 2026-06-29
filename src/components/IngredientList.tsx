@@ -1,5 +1,7 @@
 import { View, Text, Pressable } from 'react-native';
 import { Ingredient } from '@/store/types';
+import { Fonts } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import { groupIngredientsByCategory } from '@/utils/formatters';
 
 interface IngredientListProps {
@@ -17,39 +19,55 @@ const CATEGORY_EMOJI: Record<string, string> = {
 };
 
 export function IngredientList({ ingredients, onSubstitute }: IngredientListProps) {
+  const { colors: c, isDark } = useTheme();
   const grouped = groupIngredientsByCategory(ingredients);
+  const swapColor = '#D9892E';
+  const subBg = isDark ? 'rgba(217,137,46,0.16)' : '#FEFCE8';
 
   return (
-    <View className="gap-4">
+    <View style={{ gap: 16 }}>
       {Object.entries(grouped).map(([category, items]) => (
         <View key={category}>
-          <View className="flex-row items-center gap-2 mb-2">
-            <Text className="text-base">{CATEGORY_EMOJI[category] ?? '🍽️'}</Text>
-            <Text className="text-xs font-bold text-text-secondary uppercase tracking-wide capitalize">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Text style={{ fontSize: 16 }}>{CATEGORY_EMOJI[category] ?? '🍽️'}</Text>
+            <Text style={{
+              fontSize: 12, fontFamily: Fonts.bodyBold, color: c.textSecondary,
+              textTransform: 'uppercase', letterSpacing: 0.5,
+            }}>
               {category}
             </Text>
           </View>
           {items.map((ing) => (
             <View
               key={ing.id}
-              className="flex-row items-center py-2 border-b border-border"
-              style={ing.substituted ? { backgroundColor: '#FEFCE8', marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 6 } : undefined}
+              style={{
+                flexDirection: 'row', alignItems: 'center', paddingVertical: 8,
+                borderBottomWidth: 1, borderBottomColor: c.border,
+                ...(ing.substituted
+                  ? { backgroundColor: subBg, marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 6 }
+                  : {}),
+              }}
             >
-              <View className="w-2 h-2 rounded-full bg-primary mr-3 shrink-0" style={ing.substituted ? { backgroundColor: '#D97706' } : undefined} />
+              <View style={{
+                width: 8, height: 8, borderRadius: 4, marginRight: 12,
+                backgroundColor: ing.substituted ? swapColor : c.primary,
+              }} />
               <Text
-                className="text-sm font-semibold text-text-primary mr-1 shrink-0"
+                style={{ fontSize: 14, fontFamily: Fonts.bodySemibold, color: c.textPrimary, marginRight: 4 }}
                 accessibilityLabel={`${ing.quantity} ${ing.item}${ing.isOptional ? ', optional' : ''}`}
               >
                 {ing.quantity}
               </Text>
-              <Text className="text-sm text-text-primary flex-1">{ing.item}</Text>
+              <Text style={{ fontSize: 14, color: c.textPrimary, flex: 1, fontFamily: Fonts.body }}>{ing.item}</Text>
               {ing.substituted && (
-                <Text style={{ fontSize: 11, color: '#D97706', fontWeight: '600', marginRight: 6 }}>
+                <Text style={{ fontSize: 11, color: swapColor, fontFamily: Fonts.bodySemibold, marginRight: 6 }}>
                   ↕ swapped
                 </Text>
               )}
               {ing.isOptional && !ing.substituted && (
-                <Text className="text-xs text-text-muted ml-2 italic">optional</Text>
+                <Text style={{ fontSize: 12, color: c.textMuted, marginLeft: 8, fontStyle: 'italic', fontFamily: Fonts.body }}>
+                  optional
+                </Text>
               )}
               {onSubstitute && (
                 <Pressable
@@ -58,7 +76,7 @@ export function IngredientList({ ingredients, onSubstitute }: IngredientListProp
                   style={{ marginLeft: 6, padding: 2 }}
                   accessibilityLabel={`Substitute ${ing.item}`}
                 >
-                  <Text style={{ fontSize: 14, color: '#9CA3AF' }}>⇄</Text>
+                  <Text style={{ fontSize: 14, color: c.textMuted }}>⇄</Text>
                 </Pressable>
               )}
             </View>

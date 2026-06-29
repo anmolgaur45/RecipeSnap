@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,8 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { useRecipeStore } from '@/store/recipeStore';
 import { useCookStore } from '@/store/cookStore';
 import CookModeStep from '@/components/CookModeStep';
-import { Colors, Spacing, BorderRadius, FontSize, Shadow } from '@/constants/theme';
+import { Spacing, BorderRadius, FontSize, Shadow, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 
 export default function CookScreen() {
   useKeepAwake();
@@ -34,6 +35,8 @@ export default function CookScreen() {
     completeSession,
     reset,
   } = useCookStore();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
 
   const [isStarting, setIsStarting] = useState(false);
   const [autoRead, setAutoRead] = useState(false);
@@ -115,7 +118,7 @@ export default function CookScreen() {
   if (isStarting) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={c.primary} />
         <Text style={styles.loadingText}>Starting cook session…</Text>
       </View>
     );
@@ -215,7 +218,7 @@ export default function CookScreen() {
             <TextInput
               style={styles.notesInput}
               placeholder="Any notes? (optional)"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={c.textMuted}
               value={notes}
               onChangeText={setNotes}
               multiline
@@ -240,10 +243,10 @@ export default function CookScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
   },
   center: {
     flex: 1,
@@ -253,11 +256,11 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: FontSize.md,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
   },
   loadingText: {
     fontSize: FontSize.sm,
-    color: Colors.textMuted,
+    color: c.textMuted,
     marginTop: Spacing.sm,
   },
 
@@ -267,9 +270,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: c.border,
   },
   closeBtn: {
     width: 36,
@@ -279,14 +282,14 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     fontSize: FontSize.lg,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     fontWeight: '600',
   },
   recipeTitle: {
     flex: 1,
     fontSize: FontSize.md,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     textAlign: 'center',
     marginHorizontal: Spacing.sm,
   },
@@ -294,11 +297,11 @@ const styles = StyleSheet.create({
   // Progress
   progressTrack: {
     height: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: c.border,
   },
   progressFill: {
     height: 4,
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
   },
 
   // Nav row
@@ -307,9 +310,9 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: c.border,
   },
   navBtn: {
     flex: 1,
@@ -319,15 +322,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   navBtnPrimary: {
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
   },
   navBtnDone: {
-    backgroundColor: Colors.success,
+    backgroundColor: c.success,
   },
   navBtnSecondary: {
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: c.border,
   },
   navBtnDisabled: {
     opacity: 0.35,
@@ -338,12 +341,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   navBtnSecondaryText: {
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     fontSize: FontSize.md,
     fontWeight: '600',
   },
   navBtnDisabledText: {
-    color: Colors.textMuted,
+    color: c.textMuted,
   },
 
   // Rating overlay
@@ -356,7 +359,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: Spacing.lg,
@@ -366,7 +369,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: c.border,
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: Spacing.lg,
@@ -375,13 +378,13 @@ const styles = StyleSheet.create({
   ratingHeading: {
     fontSize: FontSize.xl,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     textAlign: 'center',
     marginBottom: Spacing.xs,
   },
   ratingSubheading: {
     fontSize: FontSize.sm,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
     marginBottom: Spacing.lg,
   },
@@ -393,25 +396,25 @@ const styles = StyleSheet.create({
   },
   star: {
     fontSize: 40,
-    color: Colors.border,
+    color: c.border,
   },
   starFilled: {
-    color: Colors.warning,
+    color: c.warning,
   },
   notesInput: {
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: c.border,
     padding: Spacing.md,
     fontSize: FontSize.sm,
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     minHeight: 72,
     textAlignVertical: 'top',
     marginBottom: Spacing.md,
   },
   saveBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
     borderRadius: BorderRadius.lg,
     paddingVertical: 14,
     alignItems: 'center',
@@ -429,12 +432,12 @@ const styles = StyleSheet.create({
   autoReadBtn: {
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
+    borderColor: c.border,
+    backgroundColor: c.background,
   },
   autoReadBtnActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   autoReadIcon: {
     fontSize: FontSize.md,

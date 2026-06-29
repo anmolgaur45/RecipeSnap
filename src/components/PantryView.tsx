@@ -8,7 +8,8 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { usePantryStore } from '@/store/pantryStore';
 import { PantryItemRow } from './PantryItemRow';
-import { Colors, Spacing, BorderRadius, FontSize } from '@/constants/theme';
+import { Spacing, BorderRadius, FontSize, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import { INGREDIENT_SUGGESTIONS } from '@/constants/ingredientSuggestions';
 import type { PantryItem } from '@/store/types';
 
@@ -41,6 +42,8 @@ const DEFAULT_STAPLES = [
 // ── Staple onboarding sheet content ───────────────────────────────────────────
 
 function StapleOnboardingContent({ onDone }: { onDone: () => void }) {
+  const { colors: c } = useTheme();
+  const ss = useMemo(() => makeSs(c), [c]);
   const [selected, setSelected] = useState<Set<string>>(new Set(['Salt', 'Black Pepper', 'Olive Oil', 'Sugar']));
   const setupStaples = usePantryStore((s) => s.setupStaples);
   const [saving, setSaving] = useState(false);
@@ -92,6 +95,8 @@ function StapleOnboardingContent({ onDone }: { onDone: () => void }) {
 // ── Edit item sheet content ────────────────────────────────────────────────────
 
 function EditItemContent({ item, onClose }: { item: PantryItem; onClose: () => void }) {
+  const { colors: c } = useTheme();
+  const ss = useMemo(() => makeSs(c), [c]);
   const updateItem = usePantryStore((s) => s.updateItem);
   const [notes, setNotes] = useState(item.notes ?? '');
   const [expiresAt, setExpiresAt] = useState(item.expiresAt ?? '');
@@ -116,7 +121,7 @@ function EditItemContent({ item, onClose }: { item: PantryItem; onClose: () => v
         value={expiresAt}
         onChangeText={setExpiresAt}
         placeholder="e.g. 2026-03-25"
-        placeholderTextColor={Colors.textMuted}
+        placeholderTextColor={c.textMuted}
       />
       <Text style={ss.label}>Notes</Text>
       <TextInput
@@ -124,11 +129,11 @@ function EditItemContent({ item, onClose }: { item: PantryItem; onClose: () => v
         value={notes}
         onChangeText={setNotes}
         placeholder="half used, frozen..."
-        placeholderTextColor={Colors.textMuted}
+        placeholderTextColor={c.textMuted}
       />
       <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
-        <Pressable onPress={onClose} style={[ss.doneBtn, { flex: 1, backgroundColor: Colors.border }]}>
-          <Text style={[ss.doneBtnText, { color: Colors.textPrimary }]}>Cancel</Text>
+        <Pressable onPress={onClose} style={[ss.doneBtn, { flex: 1, backgroundColor: c.border }]}>
+          <Text style={[ss.doneBtnText, { color: c.textPrimary }]}>Cancel</Text>
         </Pressable>
         <Pressable onPress={handleSave} style={[ss.doneBtn, { flex: 1 }]} disabled={saving}>
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={ss.doneBtnText}>Save</Text>}
@@ -142,6 +147,9 @@ function EditItemContent({ item, onClose }: { item: PantryItem; onClose: () => v
 
 export function PantryView() {
   const insets = useSafeAreaInsets();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
+  const ss = useMemo(() => makeSs(c), [c]);
   const { items, isLoading, fetchPantry, deleteItem, quickAdd, addItem, getExpiringItems } = usePantryStore();
   const [quickAddText, setQuickAddText] = useState('');
   const [isQuickAdding, setIsQuickAdding] = useState(false);
@@ -249,7 +257,7 @@ export function PantryView() {
   }, [items]);
 
   if (isLoading && items.length === 0) {
-    return <View style={styles.center}><ActivityIndicator color={Colors.primary} /></View>;
+    return <View style={styles.center}><ActivityIndicator color={c.primary} /></View>;
   }
 
   return (
@@ -261,7 +269,7 @@ export function PantryView() {
           value={quickAddText}
           onChangeText={setQuickAddText}
           placeholder="Add items... (e.g. eggs, 2 cups rice, milk)"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={c.textMuted}
           returnKeyType="done"
           onSubmitEditing={handleQuickAdd}
           onBlur={() => setTimeout(() => setSuggestions([]), 150)}
@@ -312,12 +320,12 @@ export function PantryView() {
 
       {/* Expiry banners */}
       {expiredCount > 0 && (
-        <View style={[styles.expiryBanner, { backgroundColor: `${Colors.error}15` }]}>
+        <View style={[styles.expiryBanner, { backgroundColor: `${c.error}15` }]}>
           <Text style={styles.expiryBannerText}>🚨 {expiredCount} item{expiredCount > 1 ? 's' : ''} expired</Text>
         </View>
       )}
       {expiringSoonCount > 0 && (
-        <Pressable style={[styles.expiryBanner, { backgroundColor: `${Colors.warning}15` }]} onPress={() => router.push('/recommendations')}>
+        <Pressable style={[styles.expiryBanner, { backgroundColor: `${c.warning}15` }]} onPress={() => router.push('/recommendations')}>
           <Text style={styles.expiryBannerText}>🕐 {expiringSoonCount} expiring soon — tap to see recipes</Text>
         </Pressable>
       )}
@@ -390,22 +398,22 @@ export function PantryView() {
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   quickAddBar: {
     flexDirection: 'row', gap: 8, padding: Spacing.md,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border,
+    backgroundColor: c.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
   },
   suggestionList: {
     marginHorizontal: Spacing.md,
     marginTop: 4,
     marginBottom: Spacing.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: c.border,
     overflow: 'hidden',
     elevation: 4,
     shadowColor: '#000',
@@ -416,10 +424,10 @@ const styles = StyleSheet.create({
   suggestionItem: {
     paddingVertical: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: c.border,
   },
   suggestionItemPressed: {
-    backgroundColor: `${Colors.primary}0C`,
+    backgroundColor: `${c.primary}0C`,
   },
   suggestionItemInner: {
     flexDirection: 'row',
@@ -431,7 +439,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -442,22 +450,22 @@ const styles = StyleSheet.create({
   suggestionItemText: {
     flex: 1,
     fontSize: FontSize.md,
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     fontWeight: '500',
   },
   suggestionPlus: {
     fontSize: 20,
-    color: Colors.primary,
+    color: c.primary,
     fontWeight: '300',
     marginLeft: Spacing.sm,
   },
   quickAddInput: {
     flex: 1, height: 42, borderRadius: 10, paddingHorizontal: 12,
-    backgroundColor: Colors.background, color: Colors.textPrimary,
-    fontSize: 14, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: c.background, color: c.textPrimary,
+    fontSize: 14, borderWidth: 1, borderColor: c.border,
   },
   quickAddBtn: {
-    backgroundColor: Colors.primary, borderRadius: 10,
+    backgroundColor: c.primary, borderRadius: 10,
     paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center',
   },
   quickAddBtnDisabled: { opacity: 0.5 },
@@ -466,29 +474,29 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.md, marginTop: Spacing.sm,
     borderRadius: 10, padding: 10,
   },
-  expiryBannerText: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
+  expiryBannerText: { fontSize: 14, fontWeight: '600', color: c.textPrimary },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
   emptyEmoji: { fontSize: 56, marginBottom: 16 },
-  emptyTitle: { fontSize: 21, fontWeight: '800', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 },
-  emptySubtitle: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 20 },
-  setupBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12 },
+  emptyTitle: { fontSize: 21, fontWeight: '800', color: c.textPrimary, textAlign: 'center', marginBottom: 8 },
+  emptySubtitle: { fontSize: 15, color: c.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 20 },
+  setupBtn: { backgroundColor: c.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12 },
   setupBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   sectionHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md, paddingVertical: 8, backgroundColor: Colors.background,
+    paddingHorizontal: Spacing.md, paddingVertical: 8, backgroundColor: c.background,
   },
-  sectionHeaderText: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
-  sectionCount: { fontSize: 12, color: Colors.textMuted, fontWeight: '600' },
+  sectionHeaderText: { fontSize: 13, fontWeight: '700', color: c.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionCount: { fontSize: 12, color: c.textMuted, fontWeight: '600' },
   cookFab: {
-    margin: Spacing.md, backgroundColor: Colors.primary,
+    margin: Spacing.md, backgroundColor: c.primary,
     borderRadius: 14, paddingVertical: 14, alignItems: 'center',
   },
   cookFabText: { color: '#fff', fontWeight: '800', fontSize: 16 },
 });
 
-const ss = StyleSheet.create({
+const makeSs = (c: ThemeColors) => StyleSheet.create({
   sheet: {
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },
@@ -498,26 +506,26 @@ const ss = StyleSheet.create({
     gap: 12,
   },
   handle: {
-    width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2,
+    width: 40, height: 4, backgroundColor: c.border, borderRadius: 2,
     alignSelf: 'center', marginBottom: 8,
   },
-  sheetTitle: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
-  sheetSubtitle: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
+  sheetTitle: { fontSize: 18, fontWeight: '800', color: c.textPrimary },
+  sheetSubtitle: { fontSize: 14, color: c.textSecondary, lineHeight: 20 },
   stapleChip: {
-    borderWidth: 1.5, borderColor: Colors.border, borderRadius: 20,
+    borderWidth: 1.5, borderColor: c.border, borderRadius: 20,
     paddingHorizontal: 14, paddingVertical: 8,
   },
-  stapleChipActive: { borderColor: Colors.primary, backgroundColor: `${Colors.primary}18` },
-  stapleChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  stapleChipTextActive: { color: Colors.primary },
+  stapleChipActive: { borderColor: c.primary, backgroundColor: `${c.primary}18` },
+  stapleChipText: { fontSize: 13, fontWeight: '600', color: c.textSecondary },
+  stapleChipTextActive: { color: c.primary },
   doneBtn: {
-    backgroundColor: Colors.primary, borderRadius: 12,
+    backgroundColor: c.primary, borderRadius: 12,
     paddingVertical: 13, alignItems: 'center',
   },
   doneBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  label: { fontSize: 13, fontWeight: '600', color: c.textSecondary },
   input: {
-    borderWidth: 1, borderColor: Colors.border, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: Colors.textPrimary,
+    borderWidth: 1, borderColor: c.border, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: c.textPrimary,
   },
 });

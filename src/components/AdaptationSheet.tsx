@@ -7,7 +7,7 @@ import {
   ScrollView,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import type { AdaptationResult, AdaptationType } from '@/store/types';
 
 const ADAPTATION_EMOJIS: Record<string, string> = {
@@ -47,6 +47,7 @@ export function AdaptationSheet({
   onSave,
   onDiscard,
 }: AdaptationSheetProps) {
+  const { colors: c } = useTheme();
   if (!result || !adaptationType) return null;
 
   const emoji = ADAPTATION_EMOJIS[adaptationType] ?? '✨';
@@ -74,7 +75,7 @@ export function AdaptationSheet({
         />
         <View
           style={{
-            backgroundColor: Colors.surface,
+            backgroundColor: c.surface,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             maxHeight: '85%',
@@ -82,7 +83,7 @@ export function AdaptationSheet({
         >
           {/* Handle bar */}
           <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 8 }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.border }} />
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: c.border }} />
           </View>
 
           <ScrollView
@@ -92,24 +93,24 @@ export function AdaptationSheet({
             {/* Banner */}
             <View
               style={{
-                backgroundColor: `${Colors.primary}10`,
+                backgroundColor: `${c.primary}10`,
                 borderRadius: 16,
                 padding: 16,
                 borderLeftWidth: 4,
-                borderLeftColor: Colors.primary,
+                borderLeftColor: c.primary,
                 gap: 4,
               }}
             >
-              <Text style={{ fontSize: 18, fontWeight: '800', color: Colors.textPrimary }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: c.textPrimary }}>
                 {emoji} {label} Adaptation
               </Text>
-              <Text style={{ fontSize: 13, color: Colors.textSecondary }}>
+              <Text style={{ fontSize: 13, color: c.textSecondary }}>
                 {changeCount === 0
                   ? 'No ingredient changes needed'
                   : `${changeCount} ingredient${changeCount !== 1 ? 's' : ''} changed`}
               </Text>
               {result.adaptedRecipe && (
-                <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 2 }}>
+                <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 2 }}>
                   "{result.adaptedRecipe.title}"
                 </Text>
               )}
@@ -156,14 +157,14 @@ export function AdaptationSheet({
             {/* Changed ingredients diff */}
             {changeCount > 0 && (
               <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: c.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
                   Ingredient Changes
                 </Text>
                 {result.changedIngredients!.map((change, i) => (
                   <View
                     key={i}
                     style={{
-                      backgroundColor: Colors.background,
+                      backgroundColor: c.background,
                       borderRadius: 12,
                       padding: 14,
                       gap: 6,
@@ -174,13 +175,13 @@ export function AdaptationSheet({
                       <Text
                         style={{
                           fontSize: 13,
-                          color: Colors.textMuted,
+                          color: c.textMuted,
                           textDecorationLine: 'line-through',
                         }}
                       >
                         {change.original}
                       </Text>
-                      <Text style={{ fontSize: 13, color: Colors.textMuted }}>→</Text>
+                      <Text style={{ fontSize: 13, color: c.textMuted }}>→</Text>
                       <Text
                         style={{
                           fontSize: 13,
@@ -192,7 +193,7 @@ export function AdaptationSheet({
                       </Text>
                     </View>
                     {/* Reason */}
-                    <Text style={{ fontSize: 12, color: Colors.textSecondary, lineHeight: 16 }}>
+                    <Text style={{ fontSize: 12, color: c.textSecondary, lineHeight: 16 }}>
                       {change.reason}
                     </Text>
                   </View>
@@ -203,10 +204,10 @@ export function AdaptationSheet({
             {/* Adaptation notes */}
             {result.adaptationNotes && (
               <View style={{ gap: 8 }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: c.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
                   Adaptation Notes
                 </Text>
-                <Text style={{ fontSize: 13, color: Colors.textSecondary, lineHeight: 20 }}>
+                <Text style={{ fontSize: 13, color: c.textSecondary, lineHeight: 20 }}>
                   {result.adaptationNotes}
                 </Text>
               </View>
@@ -217,7 +218,7 @@ export function AdaptationSheet({
               <Pressable
                 onPress={handleSave}
                 style={({ pressed }) => ({
-                  backgroundColor: Colors.primary,
+                  backgroundColor: c.primary,
                   borderRadius: 14,
                   paddingVertical: 15,
                   alignItems: 'center',
@@ -232,7 +233,7 @@ export function AdaptationSheet({
                 onPress={handleDiscard}
                 style={{ paddingVertical: 14, alignItems: 'center' }}
               >
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, fontWeight: '600' }}>
+                <Text style={{ fontSize: 15, color: c.textSecondary, fontWeight: '600' }}>
                   Discard
                 </Text>
               </Pressable>

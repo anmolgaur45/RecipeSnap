@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { Colors, Spacing, BorderRadius } from '@/constants/theme';
+import { Spacing, BorderRadius } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 
 interface Props {
   weekStart: string; // ISO date string (Monday)
@@ -31,6 +32,7 @@ function formatWeekRange(weekStart: string): string {
 }
 
 export function MealPlanCalendar({ weekStart, onPrevWeek, onNextWeek, onToday }: Props) {
+  const { colors: c } = useTheme();
   const today = new Date().toISOString().split('T')[0];
 
   const weekDates = Array.from({ length: 7 }, (_, i) => {
@@ -50,7 +52,7 @@ export function MealPlanCalendar({ weekStart, onPrevWeek, onNextWeek, onToday }:
           style={{ padding: 8, marginRight: 4 }}
           hitSlop={8}
         >
-          <Text style={{ fontSize: 18, color: Colors.textSecondary }}>{'‹'}</Text>
+          <Text style={{ fontSize: 18, color: c.textSecondary }}>{'‹'}</Text>
         </Pressable>
 
         <Text
@@ -59,7 +61,7 @@ export function MealPlanCalendar({ weekStart, onPrevWeek, onNextWeek, onToday }:
             textAlign: 'center',
             fontSize: 15,
             fontWeight: '700',
-            color: Colors.textPrimary,
+            color: c.textPrimary,
           }}
         >
           {formatWeekRange(weekStart)}
@@ -70,7 +72,7 @@ export function MealPlanCalendar({ weekStart, onPrevWeek, onNextWeek, onToday }:
           style={{ padding: 8, marginLeft: 4 }}
           hitSlop={8}
         >
-          <Text style={{ fontSize: 18, color: Colors.textSecondary }}>{'›'}</Text>
+          <Text style={{ fontSize: 18, color: c.textSecondary }}>{'›'}</Text>
         </Pressable>
 
         {!isCurrentWeek && (
@@ -79,12 +81,12 @@ export function MealPlanCalendar({ weekStart, onPrevWeek, onNextWeek, onToday }:
             style={{
               paddingHorizontal: 10,
               paddingVertical: 4,
-              backgroundColor: Colors.primary + '15',
+              backgroundColor: c.primary + '15',
               borderRadius: BorderRadius.full,
               marginLeft: 4,
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.primary }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: c.primary }}>
               Today
             </Text>
           </Pressable>
@@ -104,7 +106,7 @@ export function MealPlanCalendar({ weekStart, onPrevWeek, onNextWeek, onToday }:
                 flex: 1,
                 alignItems: 'center',
                 paddingVertical: 6,
-                backgroundColor: isToday ? Colors.primary : 'transparent',
+                backgroundColor: isToday ? c.primary : 'transparent',
                 borderRadius: BorderRadius.sm,
               }}
             >
@@ -112,7 +114,7 @@ export function MealPlanCalendar({ weekStart, onPrevWeek, onNextWeek, onToday }:
                 style={{
                   fontSize: 10,
                   fontWeight: '600',
-                  color: isToday ? '#fff' : Colors.textMuted,
+                  color: isToday ? '#fff' : c.textMuted,
                   marginBottom: 2,
                 }}
               >
@@ -122,7 +124,7 @@ export function MealPlanCalendar({ weekStart, onPrevWeek, onNextWeek, onToday }:
                 style={{
                   fontSize: 13,
                   fontWeight: '700',
-                  color: isToday ? '#fff' : Colors.textPrimary,
+                  color: isToday ? '#fff' : c.textPrimary,
                 }}
               >
                 {dayNum}

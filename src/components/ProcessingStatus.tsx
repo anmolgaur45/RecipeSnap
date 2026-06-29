@@ -2,7 +2,7 @@ import { View, Text, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import { ProcessingStatus as ProcessingStatusType } from '@/store/types';
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 
 interface ProcessingStatusProps {
   status: ProcessingStatusType;
@@ -20,6 +20,7 @@ const MESSAGES = [
 const EMOJIS = ['🍳', '🥘', '👨‍🍳', '🥗', '✨'];
 
 export function ProcessingStatus({ status: _ }: ProcessingStatusProps) {
+  const { colors: c } = useTheme();
   const [msgIndex, setMsgIndex] = useState(0);
   const [emojiIndex, setEmojiIndex] = useState(0);
 
@@ -70,7 +71,7 @@ export function ProcessingStatus({ status: _ }: ProcessingStatusProps) {
   }, []);
 
   return (
-    <LinearGradient colors={['#FFF8F5', '#F8F7F4']} style={{ flex: 1 }}>
+    <LinearGradient colors={[c.surfaceAlt, c.background]} style={{ flex: 1 }}>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
 
         {/* Floating emoji bubble */}
@@ -80,7 +81,7 @@ export function ProcessingStatus({ status: _ }: ProcessingStatusProps) {
               width: 108,
               height: 108,
               borderRadius: 54,
-              backgroundColor: `${Colors.primary}14`,
+              backgroundColor: `${c.primary}14`,
               alignItems: 'center',
               justifyContent: 'center',
             }}
@@ -96,7 +97,7 @@ export function ProcessingStatus({ status: _ }: ProcessingStatusProps) {
           style={{
             fontSize: 26,
             fontWeight: '800',
-            color: Colors.textPrimary,
+            color: c.textPrimary,
             textAlign: 'center',
             letterSpacing: -0.5,
             lineHeight: 32,
@@ -111,7 +112,7 @@ export function ProcessingStatus({ status: _ }: ProcessingStatusProps) {
           style={{
             opacity: fadeMsg,
             fontSize: 15,
-            color: Colors.textSecondary,
+            color: c.textSecondary,
             textAlign: 'center',
             marginBottom: 44,
           }}
@@ -128,14 +129,14 @@ export function ProcessingStatus({ status: _ }: ProcessingStatusProps) {
                 width: 9,
                 height: 9,
                 borderRadius: 5,
-                backgroundColor: Colors.primary,
+                backgroundColor: c.primary,
                 opacity: dot,
               }}
             />
           ))}
         </View>
 
-        <Text style={{ fontSize: 12, color: Colors.textMuted, textAlign: 'center' }}>
+        <Text style={{ fontSize: 12, color: c.textMuted, textAlign: 'center' }}>
           This usually takes 20–60 seconds
         </Text>
       </View>

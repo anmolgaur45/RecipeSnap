@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
-import { Colors, Spacing, BorderRadius, FontSize, Shadow } from '@/constants/theme';
+import { Spacing, BorderRadius, FontSize, Shadow, Fonts, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import type { RecipeRecommendation } from '@/services/recommend';
 
 // ── Cuisine emoji map ─────────────────────────────────────────────────────────
@@ -21,10 +23,12 @@ function getCuisineEmoji(cuisine: string | null): string {
 // ── Match ring ────────────────────────────────────────────────────────────────
 
 function MatchRing({ pct, category }: { pct: number; category: string }) {
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const color =
-    category === 'ready' ? Colors.success
-    : category === 'almost' ? Colors.warning
-    : '#9CA3AF';
+    category === 'ready' ? c.success
+    : category === 'almost' ? c.warning
+    : c.textMuted;
 
   return (
     <View style={[styles.ring, { borderColor: color }]}>
@@ -50,6 +54,8 @@ interface Props {
 }
 
 export function RecipeRecommendationCard({ rec, onAddMissing }: Props) {
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const badge = BADGE[rec.category];
   const emoji = getCuisineEmoji(rec.recipeCuisine);
 
@@ -119,9 +125,9 @@ export function RecipeRecommendationCard({ rec, onAddMissing }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
@@ -136,7 +142,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: BorderRadius.md,
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -150,7 +156,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize.md,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     lineHeight: 20,
   },
   metaRow: {
@@ -161,8 +167,8 @@ const styles = StyleSheet.create({
   },
   metaChip: {
     fontSize: FontSize.xs,
-    color: Colors.textSecondary,
-    backgroundColor: Colors.background,
+    color: c.textSecondary,
+    backgroundColor: c.background,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: BorderRadius.full,
@@ -227,6 +233,6 @@ const styles = StyleSheet.create({
   addMissingText: {
     fontSize: FontSize.xs,
     fontWeight: '700',
-    color: Colors.primary,
+    color: c.primary,
   },
 });

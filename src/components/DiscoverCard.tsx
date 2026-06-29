@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, Image, StyleSheet, ActivityIndicator } from 'react-native';
-import { Colors, BorderRadius, FontSize, Shadow } from '@/constants/theme';
+import { Shadow, Fonts, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import type { MealSummary } from '@/services/mealdb';
 
 interface Props {
@@ -10,6 +11,9 @@ interface Props {
 }
 
 export default function DiscoverCard({ meal, onPress, isLoading }: Props) {
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
+
   return (
     <Pressable
       onPress={() => onPress(meal)}
@@ -25,7 +29,6 @@ export default function DiscoverCard({ meal, onPress, isLoading }: Props) {
             <ActivityIndicator size="small" color="#fff" />
           </View>
         ) : null}
-        {/* "+" badge */}
         <View style={styles.plusBadge}>
           <Text style={styles.plusText}>{'+'}</Text>
         </View>
@@ -37,20 +40,16 @@ export default function DiscoverCard({ meal, onPress, isLoading }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   card: {
     width: 150,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: 14,
     marginRight: 10,
     overflow: 'hidden',
     ...Shadow.sm,
   },
-  imageWrap: {
-    width: 150,
-    height: 108,
-    backgroundColor: Colors.border,
-  },
+  imageWrap: { width: 150, height: 108, backgroundColor: c.surfaceAlt },
   image: { width: 150, height: 108 },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -65,16 +64,11 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  plusText: { color: '#fff', fontSize: 18, fontWeight: '700', lineHeight: 22 },
+  plusText: { color: '#fff', fontSize: 18, fontFamily: Fonts.bodyBold, lineHeight: 22 },
   body: { padding: 9 },
-  title: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    lineHeight: 16,
-  },
+  title: { fontSize: 12, fontFamily: Fonts.bodySemibold, color: c.textPrimary, lineHeight: 16 },
 });

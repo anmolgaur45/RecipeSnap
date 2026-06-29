@@ -1,84 +1,75 @@
 import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
+import { Fonts } from '@/constants/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
-function tabIcon(focused: boolean, active: IoniconName, inactive: IoniconName) {
-  return (
+export default function TabLayout() {
+  const { colors, isDark } = useTheme();
+
+  const icon = (focused: boolean, active: IoniconName, inactive: IoniconName) => (
     <Ionicons
       name={focused ? active : inactive}
-      size={24}
-      color={focused ? Colors.primary : Colors.textMuted}
+      size={23}
+      color={focused ? colors.primary : colors.textMuted}
     />
   );
-}
 
-export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderTopColor: Colors.border,
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
           borderTopWidth: 1,
           paddingBottom: 6,
           paddingTop: 6,
-          height: 60,
+          height: 62,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
+          fontSize: 10.5,
+          fontFamily: Fonts.bodySemibold,
+          marginTop: 1,
         },
-        headerStyle: {
-          backgroundColor: Colors.surface,
-        },
-        headerTintColor: Colors.textPrimary,
-        headerShadowVisible: false,
+        headerShown: false,
       }}
     >
       <Tabs.Screen
         name="index"
-        options={{
-          title: 'Home',
-          headerShown: false,
-          tabBarIcon: ({ focused }) => tabIcon(focused, 'home', 'home-outline'),
-        }}
+        options={{ title: 'Home', tabBarIcon: ({ focused }) => icon(focused, 'home', 'home-outline') }}
       />
       <Tabs.Screen
         name="plan"
-        options={{
-          title: 'Plan',
-          headerShown: false,
-          tabBarIcon: ({ focused }) => tabIcon(focused, 'calendar', 'calendar-outline'),
-        }}
+        options={{ title: 'Plan', tabBarIcon: ({ focused }) => icon(focused, 'calendar', 'calendar-outline') }}
       />
-      {/* Center action button — add a recipe */}
+      {/* Center action button — add a recipe (green rounded square, elevated) */}
       <Tabs.Screen
         name="add"
         options={{
-          headerShown: false,
           title: '',
           tabBarLabel: () => null,
           tabBarItemStyle: { paddingBottom: 0 },
           tabBarIcon: () => (
-            <View style={{
-              width: 52,
-              height: 52,
-              borderRadius: 26,
-              backgroundColor: Colors.primary,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 18,
-              shadowColor: Colors.primary,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.45,
-              shadowRadius: 8,
-              elevation: 8,
-            }}>
+            <View
+              style={{
+                width: 54,
+                height: 54,
+                borderRadius: 19,
+                backgroundColor: colors.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 16,
+                shadowColor: colors.primary,
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: isDark ? 0.5 : 0.4,
+                shadowRadius: 10,
+                elevation: 8,
+              }}
+            >
               <Ionicons name="add" size={30} color="#fff" />
             </View>
           ),
@@ -86,19 +77,11 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="grocery"
-        options={{
-          title: 'Grocery',
-          headerShown: false,
-          tabBarIcon: ({ focused }) => tabIcon(focused, 'cart', 'cart-outline'),
-        }}
+        options={{ title: 'Grocery', tabBarIcon: ({ focused }) => icon(focused, 'cart', 'cart-outline') }}
       />
       <Tabs.Screen
         name="library"
-        options={{
-          title: 'Library',
-          headerShown: false,
-          tabBarIcon: ({ focused }) => tabIcon(focused, 'bookmarks', 'bookmarks-outline'),
-        }}
+        options={{ title: 'Library', tabBarIcon: ({ focused }) => icon(focused, 'bookmarks', 'bookmarks-outline') }}
       />
     </Tabs>
   );

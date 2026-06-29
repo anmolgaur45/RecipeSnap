@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,8 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useGroceryStore } from '@/store/groceryStore';
 import { useRecipeStore } from '@/store/recipeStore';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing, Fonts, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import type { GroceryListItem, GroceryList } from '@/store/types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ const AISLE_EMOJI: Record<string, string> = {
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function GroceryRowSkeleton() {
+  const { colors: c } = useTheme();
   const opacity = useRef(new Animated.Value(0.4)).current;
   useEffect(() => {
     const shimmer = Animated.loop(
@@ -49,27 +51,28 @@ function GroceryRowSkeleton() {
     return () => shimmer.stop();
   }, [opacity]);
   return (
-    <Animated.View style={{ opacity, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#fff', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB', gap: 12 }}>
-      <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#E5E7EB' }} />
+    <Animated.View style={{ opacity, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: c.surface, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border, gap: 12 }}>
+      <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: c.surfaceAlt }} />
       <View style={{ flex: 1, gap: 6 }}>
-        <View style={{ height: 14, borderRadius: 7, backgroundColor: '#E5E7EB', width: '70%' }} />
-        <View style={{ height: 11, borderRadius: 6, backgroundColor: '#E5E7EB', width: '40%' }} />
+        <View style={{ height: 14, borderRadius: 7, backgroundColor: c.surfaceAlt, width: '70%' }} />
+        <View style={{ height: 11, borderRadius: 6, backgroundColor: c.surfaceAlt, width: '40%' }} />
       </View>
-      <View style={{ width: 40, height: 22, borderRadius: 11, backgroundColor: '#E5E7EB' }} />
+      <View style={{ width: 40, height: 22, borderRadius: 11, backgroundColor: c.surfaceAlt }} />
     </Animated.View>
   );
 }
 
 function GroceryLoadingSkeleton() {
+  const { colors: c } = useTheme();
   return (
     <View>
       {/* Section header skeleton */}
-      <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F8F7F4' }}>
-        <View style={{ height: 10, width: 80, borderRadius: 5, backgroundColor: '#E5E7EB' }} />
+      <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: c.surfaceAlt }}>
+        <View style={{ height: 10, width: 80, borderRadius: 5, backgroundColor: c.surfaceAlt }} />
       </View>
       {[1, 2, 3].map((i) => <GroceryRowSkeleton key={i} />)}
-      <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F8F7F4', marginTop: 8 }}>
-        <View style={{ height: 10, width: 60, borderRadius: 5, backgroundColor: '#E5E7EB' }} />
+      <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: c.surfaceAlt, marginTop: 8 }}>
+        <View style={{ height: 10, width: 60, borderRadius: 5, backgroundColor: c.surfaceAlt }} />
       </View>
       {[4, 5].map((i) => <GroceryRowSkeleton key={i} />)}
     </View>
@@ -87,6 +90,8 @@ interface ItemRowProps {
 }
 
 function ItemRow({ item, recipeNames, onToggle, onDelete }: ItemRowProps) {
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const swipeRef = useRef<Swipeable>(null);
 
   const renderRightActions = () => (
@@ -160,6 +165,9 @@ interface AddItemSheetProps {
 }
 
 function AddItemSheet({ onClose, onAdd }: AddItemSheetProps) {
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
+  const ss = useMemo(() => makeSs(c), [c]);
   const [text, setText] = useState('');
 
   const handleAdd = () => {
@@ -178,7 +186,7 @@ function AddItemSheet({ onClose, onAdd }: AddItemSheetProps) {
         value={text}
         onChangeText={setText}
         placeholder="e.g. 2 cups flour, garlic..."
-        placeholderTextColor={Colors.textMuted}
+        placeholderTextColor={c.textMuted}
         style={styles.addItemInput}
         autoFocus
         onSubmitEditing={handleAdd}
@@ -186,7 +194,7 @@ function AddItemSheet({ onClose, onAdd }: AddItemSheetProps) {
       />
       <View style={styles.addItemButtons}>
         <Pressable onPress={onClose} style={styles.addItemCancel}>
-          <Text style={{ color: Colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
+          <Text style={{ color: c.textSecondary, fontWeight: '600' }}>Cancel</Text>
         </Pressable>
         <Pressable
           onPress={handleAdd}
@@ -207,6 +215,9 @@ interface GenerateListSheetProps {
 }
 
 function GenerateListSheet({ onClose }: GenerateListSheetProps) {
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
+  const ss = useMemo(() => makeSs(c), [c]);
   const { recipes } = useRecipeStore();
   const { createList } = useGroceryStore();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -240,7 +251,7 @@ function GenerateListSheet({ onClose }: GenerateListSheetProps) {
     <View style={[ss.sheetContent, { maxHeight: '70%' }]}>
       <View style={ss.handle} />
       <Text style={ss.sheetTitle}>Generate Grocery List</Text>
-      <Text style={{ fontSize: 13, color: Colors.textSecondary, marginBottom: 4 }}>
+      <Text style={{ fontSize: 13, color: c.textSecondary, marginBottom: 4 }}>
         Select recipes to include:
       </Text>
 
@@ -266,7 +277,7 @@ function GenerateListSheet({ onClose }: GenerateListSheetProps) {
         onPress={() => setSubtractPantry(!subtractPantry)}
         style={styles.toggleRow}
       >
-        <Text style={{ fontSize: 14, color: Colors.textPrimary }}>Exclude pantry items</Text>
+        <Text style={{ fontSize: 14, color: c.textPrimary }}>Exclude pantry items</Text>
         <View style={[styles.toggle, subtractPantry && styles.toggleOn]}>
           <View style={[styles.toggleThumb, subtractPantry && styles.toggleThumbOn]} />
         </View>
@@ -274,7 +285,7 @@ function GenerateListSheet({ onClose }: GenerateListSheetProps) {
 
       <View style={styles.addItemButtons}>
         <Pressable onPress={onClose} style={styles.addItemCancel}>
-          <Text style={{ color: Colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
+          <Text style={{ color: c.textSecondary, fontWeight: '600' }}>Cancel</Text>
         </Pressable>
         <Pressable
           onPress={() => { void handleGenerate(); }}
@@ -294,6 +305,9 @@ function GenerateListSheet({ onClose }: GenerateListSheetProps) {
 
 export default function GroceryScreen() {
   const insets = useSafeAreaInsets();
+  const { colors: c } = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
+  const ss = useMemo(() => makeSs(c), [c]);
   const { activeList, lists, isLoading, fetchLists, toggleItem, addItem, deleteItem, archiveList, shareText } =
     useGroceryStore();
   const { recipes } = useRecipeStore();
@@ -525,12 +539,12 @@ export default function GroceryScreen() {
           </View>
         )}
         stickySectionHeadersEnabled
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void onRefresh(); }} tintColor={Colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void onRefresh(); }} tintColor={c.primary} />}
         contentContainerStyle={{ paddingBottom: 100 }}
         ListEmptyComponent={
           isLoading ? null : (
             <View style={{ padding: 24, alignItems: 'center' }}>
-              <Text style={{ color: Colors.textMuted, fontSize: 14 }}>All items checked! 🎉</Text>
+              <Text style={{ color: c.textMuted, fontSize: 14 }}>All items checked! 🎉</Text>
             </View>
           )
         }
@@ -583,10 +597,10 @@ export default function GroceryScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
   },
   header: {
     flexDirection: 'row',
@@ -594,84 +608,84 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
     paddingVertical: 14,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: c.border,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     flex: 1,
   },
   headerBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: `${Colors.primary}12`,
+    backgroundColor: `${c.primary}12`,
     borderRadius: 20,
   },
   headerBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.primary,
+    color: c.primary,
   },
   progressContainer: {
     paddingHorizontal: Spacing.md,
     paddingVertical: 10,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: c.border,
     gap: 6,
   },
   progressBar: {
     height: 6,
-    backgroundColor: Colors.border,
+    backgroundColor: c.border,
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
     borderRadius: 3,
   },
   progressLabel: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: c.textMuted,
   },
   listSelector: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.md,
     paddingVertical: 8,
     gap: 8,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
   },
   listSelectorChip: {
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 20,
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
     maxWidth: 120,
   },
   listSelectorChipActive: {
-    backgroundColor: `${Colors.primary}18`,
+    backgroundColor: `${c.primary}18`,
   },
   listSelectorText: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: c.textMuted,
   },
   listSelectorTextActive: {
-    color: Colors.primary,
+    color: c.primary,
     fontWeight: '600',
   },
   sectionHeader: {
     paddingHorizontal: Spacing.md,
     paddingVertical: 8,
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
   },
   sectionHeaderText: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.textMuted,
+    color: c.textMuted,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
@@ -680,9 +694,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
     paddingVertical: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: c.border,
     gap: 12,
   },
   itemRowChecked: {
@@ -693,13 +707,13 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   checkmark: {
     color: '#fff',
@@ -717,22 +731,22 @@ const styles = StyleSheet.create({
   },
   itemName: {
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     flex: 1,
   },
   itemNameChecked: {
     textDecorationLine: 'line-through',
-    color: Colors.textMuted,
+    color: c.textMuted,
   },
   qtyBadge: {
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
   },
   qtyText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     fontWeight: '500',
   },
   recipeTags: {
@@ -741,7 +755,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   recipeTag: {
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${c.primary}10`,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
@@ -749,11 +763,11 @@ const styles = StyleSheet.create({
   },
   recipeTagText: {
     fontSize: 10,
-    color: Colors.primary,
+    color: c.primary,
     fontWeight: '500',
   },
   swipeDelete: {
-    backgroundColor: '#EF4444',
+    backgroundColor: c.error,
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
@@ -769,10 +783,10 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
+    shadowColor: c.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -787,12 +801,12 @@ const styles = StyleSheet.create({
   newListBtn: {
     position: 'absolute',
     left: Spacing.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: c.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -802,7 +816,7 @@ const styles = StyleSheet.create({
   newListBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
   },
   emptyState: {
     flex: 1,
@@ -818,18 +832,18 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   emptyAction: {
     marginTop: 8,
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 14,
@@ -842,12 +856,12 @@ const styles = StyleSheet.create({
   // Sheet styles
   addItemInput: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: c.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: c.textPrimary,
   },
   addItemButtons: {
     flexDirection: 'row',
@@ -855,14 +869,14 @@ const styles = StyleSheet.create({
   },
   addItemCancel: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: c.background,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
   },
   addItemConfirm: {
     flex: 2,
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -874,24 +888,24 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: c.border,
   },
   recipeSelectCheck: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   recipeSelectCheckOn: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   recipeSelectName: {
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: c.textPrimary,
     flex: 1,
   },
   toggleRow: {
@@ -904,11 +918,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 26,
     borderRadius: 13,
-    backgroundColor: Colors.border,
+    backgroundColor: c.border,
     padding: 2,
   },
   toggleOn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: c.primary,
   },
   toggleThumb: {
     width: 22,
@@ -921,9 +935,9 @@ const styles = StyleSheet.create({
   },
 });
 
-const ss = StyleSheet.create({
+const makeSs = (c: ThemeColors) => StyleSheet.create({
   sheet: {
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },
@@ -933,12 +947,12 @@ const ss = StyleSheet.create({
     gap: 16,
   },
   handle: {
-    width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2,
+    width: 40, height: 4, backgroundColor: c.border, borderRadius: 2,
     alignSelf: 'center', marginBottom: 4,
   },
   sheetTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: c.textPrimary,
   },
 });

@@ -16,7 +16,8 @@ import { useRecipeStore } from '@/store/recipeStore';
 import { RecipeCard } from '@/components/RecipeCard';
 import { RecipeCardSkeleton } from '@/components/RecipeCardSkeleton';
 import { PantryView } from '@/components/PantryView';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing, Fonts } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import { Collection, Recipe, TagGroup } from '@/store/types';
 import {
   searchRecipes,
@@ -39,6 +40,7 @@ function filterKey(type: string, value: string) {
 
 export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
+  const { colors: c } = useTheme();
   const { recipes, isSyncing, syncRecipes } = useRecipeStore();
 
   const [activeSegment, setActiveSegment] = useState<'recipes' | 'pantry'>('recipes');
@@ -172,12 +174,12 @@ export default function LibraryScreen() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.surface} />
+    <View style={{ flex: 1, backgroundColor: c.background }}>
+      <StatusBar barStyle="dark-content" backgroundColor={c.surface} />
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <View style={{
-        backgroundColor: Colors.surface,
+        backgroundColor: c.surface,
         paddingHorizontal: Spacing.md,
         paddingTop: insets.top + 8,
         paddingBottom: 12,
@@ -188,14 +190,14 @@ export default function LibraryScreen() {
         elevation: 4,
       }}>
         {/* Segment control */}
-        <View style={{ flexDirection: 'row', backgroundColor: Colors.background, borderRadius: 12, padding: 3, marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', backgroundColor: c.background, borderRadius: 12, padding: 3, marginBottom: 12 }}>
           {(['recipes', 'pantry'] as const).map((seg) => (
             <Pressable
               key={seg}
               onPress={() => setActiveSegment(seg)}
               style={{
                 flex: 1, paddingVertical: 7, borderRadius: 10, alignItems: 'center',
-                backgroundColor: activeSegment === seg ? Colors.surface : 'transparent',
+                backgroundColor: activeSegment === seg ? c.surface : 'transparent',
                 shadowColor: activeSegment === seg ? '#000' : 'transparent',
                 shadowOffset: { width: 0, height: 1 },
                 shadowOpacity: 0.08,
@@ -207,7 +209,7 @@ export default function LibraryScreen() {
                 <Text style={{ fontSize: 15 }}>{seg === 'recipes' ? '📚' : '🥫'}</Text>
                 <Text style={{
                   fontSize: 14, fontWeight: '700',
-                  color: activeSegment === seg ? Colors.textPrimary : Colors.textMuted,
+                  color: activeSegment === seg ? c.textPrimary : c.textMuted,
                 }}>
                   {seg === 'recipes' ? 'Recipes' : 'Pantry'}
                 </Text>
@@ -219,10 +221,10 @@ export default function LibraryScreen() {
         {/* Pantry title — only when pantry segment active */}
         {activeSegment === 'pantry' && (
           <View style={{ paddingBottom: 4 }}>
-            <Text style={{ fontSize: 24, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 }}>
+            <Text style={{ fontSize: 25, fontFamily: Fonts.serif, color: c.textPrimary, letterSpacing: -0.3 }}>
               My Pantry
             </Text>
-            <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 1 }}>
+            <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 1 }}>
               Track ingredients &amp; reduce waste
             </Text>
           </View>
@@ -232,10 +234,10 @@ export default function LibraryScreen() {
         {activeSegment === 'recipes' && (<>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 24, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 }}>
+            <Text style={{ fontSize: 25, fontFamily: Fonts.serif, color: c.textPrimary, letterSpacing: -0.3 }}>
               My Recipes
             </Text>
-            <Text style={{ fontSize: 12, color: Colors.textMuted, marginTop: 1 }}>
+            <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 1 }}>
               {recipes.length} {recipes.length === 1 ? 'recipe' : 'recipes'} saved
             </Text>
           </View>
@@ -244,13 +246,13 @@ export default function LibraryScreen() {
             onPress={() => setSort((s) => (s === 'recent' ? 'alpha' : 'recent'))}
             style={{
               flexDirection: 'row', alignItems: 'center', gap: 5,
-              backgroundColor: Colors.background,
+              backgroundColor: c.background,
               borderRadius: 10, paddingHorizontal: 11, paddingVertical: 7,
-              borderWidth: 1, borderColor: Colors.border,
+              borderWidth: 1, borderColor: c.border,
             }}
           >
             <Text style={{ fontSize: 13 }}>{sort === 'recent' ? '⏱' : '🔤'}</Text>
-            <Text style={{ fontSize: 12, color: Colors.textSecondary, fontWeight: '600' }}>
+            <Text style={{ fontSize: 12, color: c.textSecondary, fontWeight: '600' }}>
               {sort === 'recent' ? 'Recent' : 'A–Z'}
             </Text>
           </Pressable>
@@ -259,23 +261,23 @@ export default function LibraryScreen() {
         {/* Search bar */}
         <View style={{
           flexDirection: 'row', alignItems: 'center',
-          backgroundColor: Colors.background,
+          backgroundColor: c.background,
           borderRadius: 14, paddingHorizontal: 13, marginBottom: 12,
-          borderWidth: 1, borderColor: Colors.border,
+          borderWidth: 1, borderColor: c.border,
         }}>
-          <Text style={{ fontSize: 15, color: Colors.textMuted, marginRight: 8 }}>🔍</Text>
+          <Text style={{ fontSize: 15, color: c.textMuted, marginRight: 8 }}>🔍</Text>
           <TextInput
             ref={searchInputRef}
-            style={{ flex: 1, paddingVertical: 11, fontSize: 14, color: Colors.textPrimary }}
+            style={{ flex: 1, paddingVertical: 11, fontSize: 14, color: c.textPrimary }}
             placeholder="Search recipes or ingredients..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={c.textMuted}
             value={search}
             onChangeText={setSearch}
             returnKeyType="search"
           />
           {search.length > 0 && (
             <Pressable onPress={() => setSearch('')} hitSlop={8}>
-              <Text style={{ fontSize: 16, color: Colors.textMuted }}>✕</Text>
+              <Text style={{ fontSize: 16, color: c.textMuted }}>✕</Text>
             </Pressable>
           )}
         </View>
@@ -294,7 +296,7 @@ export default function LibraryScreen() {
                   style={{
                     flexDirection: 'row', alignItems: 'center', gap: 4,
                     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-                    backgroundColor: active ? color : Colors.surface,
+                    backgroundColor: active ? color : c.surface,
                     borderWidth: 1.5,
                     borderColor: active ? color : `${color}60`,
                   }}
@@ -309,7 +311,7 @@ export default function LibraryScreen() {
 
             {/* Separator */}
             {tagFilterTypes.length > 0 && (
-              <View style={{ width: 1, backgroundColor: Colors.border, marginHorizontal: 2, borderRadius: 1 }} />
+              <View style={{ width: 1, backgroundColor: c.border, marginHorizontal: 2, borderRadius: 1 }} />
             )}
 
             {/* Dynamic tag chips */}
@@ -324,12 +326,12 @@ export default function LibraryScreen() {
                     style={{
                       flexDirection: 'row', alignItems: 'center', gap: 4,
                       paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-                      backgroundColor: active ? Colors.primary : Colors.surface,
+                      backgroundColor: active ? c.primary : c.surface,
                       borderWidth: 1.5,
-                      borderColor: active ? Colors.primary : `${Colors.primary}50`,
+                      borderColor: active ? c.primary : `${c.primary}50`,
                     }}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: active ? '#fff' : Colors.primary }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: active ? '#fff' : c.primary }}>
                       {tag}
                     </Text>
                     {active && <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)' }}>✕</Text>}
@@ -343,19 +345,19 @@ export default function LibraryScreen() {
         {/* Active filter summary */}
         {hasAnyFilter && (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-            <Text style={{ fontSize: 12, color: Colors.textMuted }}>
+            <Text style={{ fontSize: 12, color: c.textMuted }}>
               {displayedRecipes.length} result{displayedRecipes.length !== 1 ? 's' : ''}
             </Text>
             <Pressable
               onPress={clearAllFilters}
               style={{
                 flexDirection: 'row', alignItems: 'center', gap: 4,
-                backgroundColor: `${Colors.primary}14`,
+                backgroundColor: `${c.primary}14`,
                 borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
               }}
             >
-              <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '700' }}>Clear filters</Text>
-              <Text style={{ fontSize: 11, color: Colors.primary }}>✕</Text>
+              <Text style={{ fontSize: 12, color: c.primary, fontWeight: '700' }}>Clear filters</Text>
+              <Text style={{ fontSize: 11, color: c.primary }}>✕</Text>
             </Pressable>
           </View>
         )}
@@ -364,8 +366,8 @@ export default function LibraryScreen() {
 
       {/* ── Collections row ──────────────────────────────────────────────────── */}
       {activeSegment === 'recipes' && (<View style={{
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 1, borderBottomColor: '#EDEBE6',
+        backgroundColor: c.surface,
+        borderBottomWidth: 1, borderBottomColor: c.border,
         paddingVertical: 10,
       }}>
         <ScrollView
@@ -381,12 +383,12 @@ export default function LibraryScreen() {
                 value={newColName}
                 onChangeText={setNewColName}
                 placeholder="Collection name..."
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={c.textMuted}
                 style={{
-                  width: 140, backgroundColor: Colors.background,
+                  width: 140, backgroundColor: c.background,
                   borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8,
-                  fontSize: 13, color: Colors.textPrimary,
-                  borderWidth: 1.5, borderColor: Colors.primary,
+                  fontSize: 13, color: c.textPrimary,
+                  borderWidth: 1.5, borderColor: c.primary,
                 }}
                 returnKeyType="done"
                 onSubmitEditing={() => { void handleNewCollection(); }}
@@ -395,7 +397,7 @@ export default function LibraryScreen() {
                 onPress={() => { void handleNewCollection(); }}
                 disabled={creatingCol || !newColName.trim()}
                 style={{
-                  backgroundColor: Colors.primary, borderRadius: 20,
+                  backgroundColor: c.primary, borderRadius: 20,
                   paddingHorizontal: 14, paddingVertical: 8,
                   opacity: creatingCol || !newColName.trim() ? 0.5 : 1,
                 }}
@@ -408,7 +410,7 @@ export default function LibraryScreen() {
                 onPress={() => { setShowNewColInput(false); setNewColName(''); }}
                 hitSlop={8}
               >
-                <Text style={{ color: Colors.textMuted, fontSize: 18 }}>✕</Text>
+                <Text style={{ color: c.textMuted, fontSize: 18 }}>✕</Text>
               </Pressable>
             </View>
           ) : (
@@ -417,12 +419,12 @@ export default function LibraryScreen() {
               style={{
                 flexDirection: 'row', alignItems: 'center', gap: 5,
                 paddingHorizontal: 13, paddingVertical: 8, borderRadius: 20,
-                borderWidth: 1.5, borderColor: `${Colors.primary}50`,
-                borderStyle: 'dashed', backgroundColor: `${Colors.primary}08`,
+                borderWidth: 1.5, borderColor: `${c.primary}50`,
+                borderStyle: 'dashed', backgroundColor: `${c.primary}08`,
               }}
             >
-              <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '700' }}>+</Text>
-              <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>New</Text>
+              <Text style={{ fontSize: 13, color: c.primary, fontWeight: '700' }}>+</Text>
+              <Text style={{ fontSize: 12, color: c.primary, fontWeight: '600' }}>New</Text>
             </Pressable>
           )}
 
@@ -436,9 +438,9 @@ export default function LibraryScreen() {
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: 6,
                   paddingHorizontal: 13, paddingVertical: 8, borderRadius: 20,
-                  backgroundColor: active ? Colors.primary : Colors.background,
+                  backgroundColor: active ? c.primary : c.background,
                   borderWidth: 1.5,
-                  borderColor: active ? Colors.primary : Colors.border,
+                  borderColor: active ? c.primary : c.border,
                 }}
               >
                 <Text style={{ fontSize: 14 }}>{col.emoji ?? '📁'}</Text>
@@ -446,17 +448,17 @@ export default function LibraryScreen() {
                   numberOfLines={1}
                   style={{
                     fontSize: 13, fontWeight: '600', maxWidth: 110,
-                    color: active ? '#fff' : Colors.textPrimary,
+                    color: active ? '#fff' : c.textPrimary,
                   }}
                 >
                   {col.name}
                 </Text>
                 <View style={{
-                  backgroundColor: active ? 'rgba(255,255,255,0.25)' : `${Colors.primary}18`,
+                  backgroundColor: active ? 'rgba(255,255,255,0.25)' : `${c.primary}18`,
                   borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2,
                   minWidth: 20, alignItems: 'center',
                 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: active ? '#fff' : Colors.primary }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: active ? '#fff' : c.primary }}>
                     {col.recipeCount}
                   </Text>
                 </View>
@@ -490,18 +492,18 @@ export default function LibraryScreen() {
           {recipes.length === 0 ? (
             <>
               <Text style={{ fontSize: 56, marginBottom: 16 }}>📖</Text>
-              <Text style={{ fontSize: 21, fontWeight: '800', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 }}>
+              <Text style={{ fontSize: 21, fontWeight: '800', color: c.textPrimary, textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 }}>
                 Your library is empty
               </Text>
-              <Text style={{ fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginBottom: 28, lineHeight: 21 }}>
+              <Text style={{ fontSize: 14, color: c.textSecondary, textAlign: 'center', marginBottom: 28, lineHeight: 21 }}>
                 Save your first recipe by pasting a link on the Extract tab
               </Text>
               <Pressable
                 onPress={() => router.push('/(tabs)/add')}
                 style={{
-                  backgroundColor: Colors.primary, borderRadius: 16,
+                  backgroundColor: c.primary, borderRadius: 16,
                   paddingHorizontal: 28, paddingVertical: 14,
-                  shadowColor: Colors.primary,
+                  shadowColor: c.primary,
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.35,
                   shadowRadius: 10,
@@ -514,20 +516,20 @@ export default function LibraryScreen() {
           ) : (
             <>
               <Text style={{ fontSize: 44, marginBottom: 12 }}>🔍</Text>
-              <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginBottom: 6 }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: c.textPrimary, textAlign: 'center', marginBottom: 6 }}>
                 No matches found
               </Text>
-              <Text style={{ fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 13, color: c.textSecondary, textAlign: 'center', marginBottom: 20 }}>
                 Try adjusting your search or filters
               </Text>
               <Pressable
                 onPress={clearAllFilters}
                 style={{
-                  backgroundColor: `${Colors.primary}14`,
+                  backgroundColor: `${c.primary}14`,
                   borderRadius: 20, paddingHorizontal: 18, paddingVertical: 9,
                 }}
               >
-                <Text style={{ color: Colors.primary, fontWeight: '700', fontSize: 14 }}>Clear all filters</Text>
+                <Text style={{ color: c.primary, fontWeight: '700', fontSize: 14 }}>Clear all filters</Text>
               </Pressable>
             </>
           )}
@@ -539,7 +541,7 @@ export default function LibraryScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: Spacing.md }}
           refreshControl={
-            <RefreshControl refreshing={isSyncing} onRefresh={onRefresh} tintColor={Colors.primary} />
+            <RefreshControl refreshing={isSyncing} onRefresh={onRefresh} tintColor={c.primary} />
           }
           showsVerticalScrollIndicator={false}
         />

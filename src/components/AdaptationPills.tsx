@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import type { AdaptationType } from '@/store/types';
 
 const CUSTOM_EXAMPLES = [
@@ -31,6 +31,7 @@ export function AdaptationPills({
   onAdapt,
   isAdapting,
 }: AdaptationPillsProps) {
+  const { colors: c } = useTheme();
   const [showCustomSheet, setShowCustomSheet] = useState(false);
   const [customText, setCustomText] = useState('');
 
@@ -61,17 +62,17 @@ export function AdaptationPills({
             paddingVertical: 10,
             borderRadius: 12,
             borderWidth: 1.5,
-            borderColor: isAdapting ? Colors.primary : Colors.border,
-            backgroundColor: isAdapting ? `${Colors.primary}10` : Colors.surface,
+            borderColor: isAdapting ? c.primary : c.border,
+            backgroundColor: isAdapting ? `${c.primary}10` : c.surface,
             opacity: pressed ? 0.7 : 1,
           })}
         >
           {isAdapting ? (
-            <ActivityIndicator size="small" color={Colors.primary} />
+            <ActivityIndicator size="small" color={c.primary} />
           ) : (
             <Text style={{ fontSize: 14 }}>✨</Text>
           )}
-          <Text style={{ fontSize: 13, fontWeight: '600', color: isAdapting ? Colors.primary : Colors.textSecondary }}>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: isAdapting ? c.primary : c.textSecondary }}>
             {isAdapting ? 'Adapting recipe…' : 'Adapt Recipe'}
           </Text>
         </Pressable>
@@ -94,7 +95,7 @@ export function AdaptationPills({
           >
             <Pressable
               style={{
-                backgroundColor: Colors.surface,
+                backgroundColor: c.surface,
                 borderTopLeftRadius: 20,
                 borderTopRightRadius: 20,
                 padding: 24,
@@ -103,22 +104,22 @@ export function AdaptationPills({
               }}
               onPress={() => {}}
             >
-              <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.textPrimary }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: c.textPrimary }}>
                 Custom Adaptation
               </Text>
               <TextInput
                 value={customText}
                 onChangeText={setCustomText}
                 placeholder="Describe what you'd like to change..."
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={c.textMuted}
                 multiline
                 style={{
                   borderWidth: 1,
-                  borderColor: Colors.border,
+                  borderColor: c.border,
                   borderRadius: 12,
                   padding: 14,
                   fontSize: 14,
-                  color: Colors.textPrimary,
+                  color: c.textPrimary,
                   minHeight: 80,
                   textAlignVertical: 'top',
                 }}
@@ -138,12 +139,12 @@ export function AdaptationPills({
                       paddingHorizontal: 12,
                       paddingVertical: 6,
                       borderRadius: 20,
-                      backgroundColor: Colors.background,
+                      backgroundColor: c.background,
                       borderWidth: 1,
-                      borderColor: Colors.border,
+                      borderColor: c.border,
                     }}
                   >
-                    <Text style={{ fontSize: 12, color: Colors.textSecondary }}>{ex}</Text>
+                    <Text style={{ fontSize: 12, color: c.textSecondary }}>{ex}</Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -152,7 +153,7 @@ export function AdaptationPills({
                 onPress={handleCustomSubmit}
                 disabled={!customText.trim()}
                 style={({ pressed }) => ({
-                  backgroundColor: Colors.primary,
+                  backgroundColor: c.primary,
                   borderRadius: 14,
                   paddingVertical: 15,
                   alignItems: 'center',
@@ -168,7 +169,7 @@ export function AdaptationPills({
                 onPress={() => setShowCustomSheet(false)}
                 style={{ paddingVertical: 10, alignItems: 'center' }}
               >
-                <Text style={{ fontSize: 15, color: Colors.textSecondary, fontWeight: '600' }}>
+                <Text style={{ fontSize: 15, color: c.textSecondary, fontWeight: '600' }}>
                   Cancel
                 </Text>
               </Pressable>

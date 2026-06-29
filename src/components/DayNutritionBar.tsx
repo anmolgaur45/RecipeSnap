@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/store/themeStore';
 import type { DayNutrition } from '@/store/types';
 
 interface Props {
@@ -19,14 +20,15 @@ const BARS: BarConfig[] = [
   { label: 'Cal', key: 'calories', color: '#6B7280', unit: '' },
   { label: 'Protein', key: 'protein', color: '#3B82F6', unit: 'g' },
   { label: 'Carbs', key: 'carbs', color: '#F59E0B', unit: 'g' },
-  { label: 'Fat', key: 'fat', color: '#FF6B35', unit: 'g' },
+  { label: 'Fat', key: 'fat', color: '#A855F7', unit: 'g' },
 ];
 
 export function DayNutritionBar({ nutrition, compact = false }: Props) {
+  const { colors: c } = useTheme();
   if (!nutrition || nutrition.totals.calories === 0) {
     return (
       <View style={{ paddingHorizontal: Spacing.md, paddingVertical: 8 }}>
-        <Text style={{ fontSize: 11, color: Colors.textMuted, textAlign: 'center' }}>
+        <Text style={{ fontSize: 11, color: c.textMuted, textAlign: 'center' }}>
           No nutrition data for planned meals
         </Text>
       </View>
@@ -46,7 +48,7 @@ export function DayNutritionBar({ nutrition, compact = false }: Props) {
               style={{
                 fontSize: 10,
                 fontWeight: '600',
-                color: Colors.textMuted,
+                color: c.textMuted,
                 width: compact ? 28 : 38,
               }}
             >
@@ -58,7 +60,7 @@ export function DayNutritionBar({ nutrition, compact = false }: Props) {
               style={{
                 flex: 1,
                 height: compact ? 4 : 6,
-                backgroundColor: '#F3F4F6',
+                backgroundColor: c.surfaceAlt,
                 borderRadius: 3,
                 overflow: 'hidden',
               }}
@@ -67,7 +69,7 @@ export function DayNutritionBar({ nutrition, compact = false }: Props) {
                 style={{
                   width: `${pct}%`,
                   height: '100%',
-                  backgroundColor: isOver ? Colors.error : color,
+                  backgroundColor: isOver ? c.error : color,
                   borderRadius: 3,
                 }}
               />
@@ -77,7 +79,7 @@ export function DayNutritionBar({ nutrition, compact = false }: Props) {
               <Text
                 style={{
                   fontSize: 10,
-                  color: isOver ? Colors.error : Colors.textMuted,
+                  color: isOver ? c.error : c.textMuted,
                   width: 48,
                   textAlign: 'right',
                   fontWeight: isOver ? '700' : '400',
