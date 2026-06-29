@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import path from 'path';
 import { extractRouter } from './routes/extract';
 import { recipesRouter } from './routes/recipes';
@@ -21,8 +22,11 @@ const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
 
 // Middleware
+// helmet sets sensible security headers. crossOriginResourcePolicy is relaxed so
+// keyframe thumbnails served in dev remain loadable by the app.
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: process.env.CORS_ORIGIN ?? '*' }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 // Dev fallback: serve keyframe thumbnails written to local disk. In prod these
 // live in Supabase Storage (absolute URLs), so this mount is unused.

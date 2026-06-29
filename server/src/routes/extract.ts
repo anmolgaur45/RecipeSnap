@@ -1,9 +1,10 @@
 import { Router, type Request, type Response, type RequestHandler } from 'express';
 import { z } from 'zod';
 import type { toRecipeRecord } from '../services/recipeStructurer';
-import { createJob, getJob } from '../queue/jobStore';
+import { createJob, getJob, checkExtractRateLimit } from '../queue/jobStore';
 import { dispatchExtraction } from '../queue/dispatcher';
 import { requireAuth } from '../middleware/auth';
+import { assertAllowedSourceUrl, UnsafeUrlError } from '../utils/urlGuard';
 
 export const extractRouter = Router();
 
@@ -42,6 +43,22 @@ extractRouter.post(
     const parseResult = ExtractBodySchema.safeParse(req.body);
     if (!parseResult.success) {
       res.status(400).json({ error: parseResult.error.errors[0]?.message ?? 'Invalid input' });
+      return;
+    }
+
+    // SSRF guard: only supported-platform hosts reach yt-dlp.
+    try {
+      assertAllowedSourceUrl(parseResult.data.url);
+    } catch (e) {
+      res.status(400).json({ error: e instanceof UnsafeUrlError ? e.message : 'Invalid URL' });
+      return;
+    }
+
+    // Per-user rate limit on the expensive extraction path.
+    const limit = await checkExtractRateLimit(req.userId!);
+    if (!limit.ok) {
+      if (limit.retryAfterSec) res.setHeader('Retry-After', String(limit.retryAfterSec));
+      res.status(429).json({ error: limit.message ?? 'Rate limit exceeded.' });
       return;
     }
 

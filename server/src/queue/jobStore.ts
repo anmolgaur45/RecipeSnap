@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { extractionJobs, type DbExtractionJob } from '../db/schema.pg';
 import type { ExtractionResult } from '../routes/extract';
@@ -67,6 +67,42 @@ export async function updateJob(
       updatedAt: new Date(),
     })
     .where(eq(extractionJobs.id, id));
+}
+
+const RATE_PER_HOUR = parseInt(process.env.EXTRACT_RATE_PER_HOUR ?? '10', 10);
+const RATE_PER_DAY = parseInt(process.env.EXTRACT_RATE_PER_DAY ?? '30', 10);
+
+export interface RateLimitResult {
+  ok: boolean;
+  retryAfterSec?: number;
+  message?: string;
+}
+
+/**
+ * Per-user rate limit for the expensive /extract path. Counts the user's recent
+ * jobs (Postgres-backed, so it holds across Cloud Run instances) against an
+ * hourly and a daily cap. Caps are env-tunable.
+ */
+export async function checkExtractRateLimit(userId: string): Promise<RateLimitResult> {
+  const now = Date.now();
+  const hourAgo = new Date(now - 3_600_000);
+  const dayAgo = new Date(now - 86_400_000);
+
+  const [counts] = await db
+    .select({
+      hourCount: sql<number>`count(*) filter (where ${extractionJobs.createdAt} >= ${hourAgo})::int`,
+      dayCount: sql<number>`count(*)::int`,
+    })
+    .from(extractionJobs)
+    .where(and(eq(extractionJobs.userId, userId), gte(extractionJobs.createdAt, dayAgo)));
+
+  if ((counts?.dayCount ?? 0) >= RATE_PER_DAY) {
+    return { ok: false, retryAfterSec: 3600, message: `Daily extraction limit reached (${RATE_PER_DAY}/day).` };
+  }
+  if ((counts?.hourCount ?? 0) >= RATE_PER_HOUR) {
+    return { ok: false, retryAfterSec: 600, message: `Hourly extraction limit reached (${RATE_PER_HOUR}/hour).` };
+  }
+  return { ok: true };
 }
 
 /** Persist per-extraction cost metering (Phase 4d) onto the job row. */
