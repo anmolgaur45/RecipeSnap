@@ -10,7 +10,9 @@ import {
   depletFromRecipe,
   quickAddAI,
 } from '../services/pantryManager';
+import { z } from 'zod';
 import { requireAuth } from '../middleware/auth';
+import { validateBody } from '../middleware/validate';
 
 export const pantryRouter = Router();
 
@@ -19,6 +21,26 @@ const ah =
   (req, res, next) => {
     fn(req, res).catch(next);
   };
+
+const AddItemSchema = z.object({
+  name: z.string().trim().min(1, 'name is required'),
+  displayName: z.string().optional(),
+  quantity: z.coerce.number().optional(),
+  unit: z.string().optional(),
+  category: z.string().optional(),
+  expiresAt: z.string().optional(),
+  isStaple: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+const QuickAddSchema = z.object({ text: z.string().trim().min(1, 'text is required') });
+const BulkAddSchema = z.object({ groceryListId: z.coerce.number().int() });
+const SetupStaplesSchema = z.object({
+  stapleNames: z.array(z.string()).min(1, 'stapleNames array is required'),
+});
+const DepleteSchema = z.object({
+  recipeId: z.string().uuid(),
+  servings: z.coerce.number().int().positive().optional(),
+});
 
 pantryRouter.use(requireAuth);
 
@@ -41,16 +63,11 @@ pantryRouter.get(
 /** POST /api/pantry — add a single item */
 pantryRouter.post(
   '/',
+  validateBody(AddItemSchema),
   ah(async (req, res) => {
-    const { name, displayName, quantity, unit, category, expiresAt, isStaple, notes } = req.body as {
-      name?: string; displayName?: string; quantity?: number; unit?: string;
-      category?: string; expiresAt?: string; isStaple?: boolean; notes?: string;
-    };
-    if (!name?.trim()) {
-      res.status(400).json({ error: 'name is required' });
-      return;
-    }
-    const item = await addItem(req.userId!, { name: name.trim(), displayName, quantity, unit, category, expiresAt, isStaple, notes });
+    const { name, displayName, quantity, unit, category, expiresAt, isStaple, notes } =
+      req.body as z.infer<typeof AddItemSchema>;
+    const item = await addItem(req.userId!, { name, displayName, quantity, unit, category, expiresAt, isStaple, notes });
     res.status(201).json(item);
   }),
 );
@@ -58,12 +75,9 @@ pantryRouter.post(
 /** POST /api/pantry/quick-add — AI parse natural text and bulk add */
 pantryRouter.post(
   '/quick-add',
+  validateBody(QuickAddSchema),
   ah(async (req, res) => {
-    const { text } = req.body as { text?: string };
-    if (!text?.trim()) {
-      res.status(400).json({ error: 'text is required' });
-      return;
-    }
+    const { text } = req.body as z.infer<typeof QuickAddSchema>;
     const items = await quickAddAI(req.userId!, text.trim());
     res.status(201).json(items);
   }),
@@ -72,12 +86,9 @@ pantryRouter.post(
 /** POST /api/pantry/bulk-add — add checked items from a grocery list */
 pantryRouter.post(
   '/bulk-add',
+  validateBody(BulkAddSchema),
   ah(async (req, res) => {
-    const { groceryListId } = req.body as { groceryListId?: number };
-    if (!groceryListId) {
-      res.status(400).json({ error: 'groceryListId is required' });
-      return;
-    }
+    const { groceryListId } = req.body as z.infer<typeof BulkAddSchema>;
     res.status(201).json(await bulkAddFromGroceryList(req.userId!, groceryListId));
   }),
 );
@@ -85,12 +96,9 @@ pantryRouter.post(
 /** POST /api/pantry/setup-staples — onboarding: mark items as staples */
 pantryRouter.post(
   '/setup-staples',
+  validateBody(SetupStaplesSchema),
   ah(async (req, res) => {
-    const { stapleNames } = req.body as { stapleNames?: string[] };
-    if (!Array.isArray(stapleNames) || stapleNames.length === 0) {
-      res.status(400).json({ error: 'stapleNames array is required' });
-      return;
-    }
+    const { stapleNames } = req.body as z.infer<typeof SetupStaplesSchema>;
     res.status(201).json(await setupStaples(req.userId!, stapleNames));
   }),
 );
@@ -98,12 +106,9 @@ pantryRouter.post(
 /** POST /api/pantry/deplete — deplete pantry after cooking a recipe */
 pantryRouter.post(
   '/deplete',
+  validateBody(DepleteSchema),
   ah(async (req, res) => {
-    const { recipeId, servings } = req.body as { recipeId?: string; servings?: number };
-    if (!recipeId) {
-      res.status(400).json({ error: 'recipeId is required' });
-      return;
-    }
+    const { recipeId, servings } = req.body as z.infer<typeof DepleteSchema>;
     res.json({ summary: await depletFromRecipe(req.userId!, recipeId, servings ?? 2) });
   }),
 );

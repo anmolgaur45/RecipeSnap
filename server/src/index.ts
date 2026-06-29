@@ -61,9 +61,14 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Error handler
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+// Error handler: log full error server-side, return a generic message (no stack
+// or internal detail leaked to the client).
+app.use((err: Error, _req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err);
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
   res.status(500).json({ error: 'Internal server error' });
 });
 

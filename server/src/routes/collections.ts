@@ -1,8 +1,10 @@
 import { Router, type Request, type Response, type RequestHandler } from 'express';
 import { and, asc, eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '../db/client';
 import { collections, recipeCollections, recipes } from '../db/schema.pg';
 import { requireAuth } from '../middleware/auth';
+import { validateBody } from '../middleware/validate';
 
 export const collectionsRouter = Router();
 
@@ -12,6 +14,15 @@ const ah =
   (req, res, next) => {
     fn(req, res).catch(next);
   };
+
+const CreateCollectionSchema = z.object({
+  name: z.string().trim().min(1, 'name is required'),
+  emoji: z.string().optional(),
+});
+
+const AddRecipeSchema = z.object({
+  recipeId: z.string().uuid(),
+});
 
 collectionsRouter.use(requireAuth);
 
@@ -41,16 +52,13 @@ collectionsRouter.get(
 /** POST /api/collections - create a collection */
 collectionsRouter.post(
   '/',
+  validateBody(CreateCollectionSchema),
   ah(async (req, res) => {
     const userId = req.userId!;
-    const { name, emoji } = req.body as { name?: string; emoji?: string };
-    if (!name?.trim()) {
-      res.status(400).json({ error: 'name is required' });
-      return;
-    }
+    const { name, emoji } = req.body as z.infer<typeof CreateCollectionSchema>;
     const [row] = await db
       .insert(collections)
-      .values({ userId, name: name.trim(), emoji: emoji ?? null })
+      .values({ userId, name, emoji: emoji ?? null })
       .returning();
     res.status(201).json({ ...row, recipeCount: 0, recipeIds: [] });
   }),
@@ -59,16 +67,13 @@ collectionsRouter.post(
 /** POST /api/collections/:id/recipes - add one of this user's recipes to their collection */
 collectionsRouter.post(
   '/:id/recipes',
+  validateBody(AddRecipeSchema),
   ah(async (req, res) => {
     const userId = req.userId!;
     const collectionId = Number(req.params.id);
-    const { recipeId } = req.body as { recipeId?: string };
+    const { recipeId } = req.body as z.infer<typeof AddRecipeSchema>;
     if (!Number.isInteger(collectionId)) {
       res.status(400).json({ error: 'invalid collection id' });
-      return;
-    }
-    if (!recipeId) {
-      res.status(400).json({ error: 'recipeId is required' });
       return;
     }
     const owned = await db

@@ -1,6 +1,8 @@
 import { Router, type Request, type Response, type RequestHandler } from 'express';
+import { z } from 'zod';
 import { getPantryMatches, getAISuggestions, getExpiringAlerts } from '../services/recipeRecommender';
 import { requireAuth } from '../middleware/auth';
+import { validateBody } from '../middleware/validate';
 
 export const recommendRouter = Router();
 
@@ -9,6 +11,10 @@ const ah =
   (req, res, next) => {
     fn(req, res).catch(next);
   };
+
+const AiSuggestSchema = z.object({
+  prioritizeExpiring: z.boolean().optional(),
+});
 
 recommendRouter.use(requireAuth);
 
@@ -26,8 +32,9 @@ recommendRouter.get(
 // POST /api/recommendations/ai-suggest
 recommendRouter.post(
   '/ai-suggest',
+  validateBody(AiSuggestSchema),
   ah(async (req, res) => {
-    const { prioritizeExpiring } = req.body as { prioritizeExpiring?: boolean };
+    const { prioritizeExpiring } = req.body as z.infer<typeof AiSuggestSchema>;
     res.json(await getAISuggestions(req.userId!, { prioritizeExpiring }));
   }),
 );
